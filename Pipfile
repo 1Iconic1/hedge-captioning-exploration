@@ -18,6 +18,9 @@ ipywidgets = "*"
 tqdm = "*"
 pandas = "*"
 jupyter-black = "*"
+ollama = "*"
+albumentations = "*"
+matplotlib = "*"
 
 [dev-packages]
 
