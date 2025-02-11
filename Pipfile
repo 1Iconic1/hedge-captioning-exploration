@@ -21,6 +21,8 @@ jupyter-black = "*"
 ollama = "*"
 albumentations = "*"
 matplotlib = "*"
+opencv-python = "*"
+scipy = "*"
 
 [dev-packages]
 
