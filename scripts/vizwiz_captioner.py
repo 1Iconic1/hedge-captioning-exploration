@@ -14,20 +14,35 @@ import torch
 
 from tqdm import tqdm
 
+# setup pytorch
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # for multi-GPU systems, force single GPU
+if torch.cuda.is_available():
+    device_map = "cuda:0"  # force single, first GPU
+    device_type = "cuda"
+elif torch.backends.mps.is_available():
+    device_map = "auto"
+    device_type = "mps"
+else:
+    device_map = "auto"
+    device_type = "cpu"
+
+print(f"Using device: {device_type}")
+
+
 # load model
 model_id = "allenai/Molmo-7B-O-0924"
 processor = AutoProcessor.from_pretrained(
     model_id,
     trust_remote_code=True,
     torch_dtype=torch.bfloat16,
-    device_map="auto",
+    device_map=device_map,
 )
 
 model = AutoModelForCausalLM.from_pretrained(
     model_id,
     trust_remote_code=True,
     torch_dtype=torch.bfloat16,
-    device_map="auto",
+    device_map=device_map,
 )
 
 # print model properties
@@ -64,7 +79,7 @@ def generate_caption(
 
     # generate output; maximum 200 new tokens; stop generation when <|endoftext|> is generated
     output = ""
-    with torch.autocast(device_type="mps", enabled=True, dtype=torch.bfloat16):
+    with torch.autocast(device_type=device_type, enabled=True, dtype=torch.bfloat16):
         output = model.generate_from_batch(
             inputs,
             GenerationConfig(max_new_tokens=200, stop_strings="<|endoftext|>"),
@@ -80,6 +95,7 @@ def generate_caption(
             generated_tokens, skip_special_tokens=True
         )
         output = generated_text.strip()
+
     return output
 
 
@@ -174,29 +190,7 @@ def generate_caption_output(image_captioning_input, image_folder, scratch_path):
     caption_output = copy.deepcopy(image_captioning_input)
 
     # parameters to model
-    # prompt = "You are a program designed to help blind and low-vision users understand images. When asked about the image, generate accessible image description that includes key visual and contextual details of the image for blind and low-vision people. Focus on the following principles: Clarity and Conciseness: Use simple, straightforward language to describe the main subjects and their relationships.; Relevance: Highlight only essential visual elements that contribute to understanding the image or its purpose.; Context: Provide contextual information when necessary, such as emotional tone, setting, or action. Avoid assumptions or subjective interpretations.; Specificity: Include important details like colors, shapes, textures, or text visible in the image, if relevant. Avoid overly general terms or unnecessary details. Once you generate your caption, shorten it to a succinct, single se60ntence. Output only the final sentence. Can you please tell me what is in this image?"
-
-    prompt = """
-    Role:
-    You are an accessibility tool designed to help blind and low-vision users understand images.
-
-    Instructions:
-    When asked about an image, generate a single-sentence description that prioritizes:
-
-    Clarity & Conciseness: Use simple language to name key subjects and their spatial and functional relationships.
-
-    Relevance: Focus on elements critical to understanding the image’s purpose or message (e.g., actions, symbols, text).
-
-    Context: Note the setting, emotional tone, or activity if they add meaning. Avoid assumptions or subjective interpretations about people and objects.
-
-    Specificity: Include colors, shapes, or textures only if important to understanding the scene and objects in it (e.g., "a red stop sign," not "a bright object"; "a can of beans", not "a white can").
-
-    Output Format:
-    Return only the final sentence. Do not include explanations, markdown, or disclaimers.
-
-    User Input:
-    Can you please tell me what is in this image?
-    """
+    prompt = "You are a program designed to help blind and low-vision users understand images. When asked about the image, generate accessible image description that includes key visual and contextual details of the image for blind and low-vision people. Focus on the following principles: Clarity and Conciseness: Use simple, straightforward language to describe the main subjects and their relationships.; Relevance: Highlight only essential visual elements that contribute to understanding the image or its purpose.; Context: Provide contextual information when necessary, such as emotional tone, setting, or action. Avoid assumptions or subjective interpretations.; Specificity: Include important details like colors, shapes, textures, or text visible in the image, if relevant. Avoid overly general terms or unnecessary details. Once you generate your caption, shorten it to a succinct, single sentence. Output only the final sentence. Can you please tell me what is in this image?"
 
     # create scratch path if it doesn't exist
     os.makedirs(scratch_path, exist_ok=True)
