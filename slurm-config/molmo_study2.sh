@@ -6,8 +6,8 @@
 #SBATCH --time 4-00:00    	                              # Max Runtime in D-HH:MM
 #SBATCH --partition liv.p    	                          # Partition to submit to
 #SBATCH --job-name molmo_study2                           # The name of the job that is running
-#SBATCH --output /scratch/kapil/slurm-molmo-study2.out    # File to which STDOUT will be written, %j inserts jobid
-#SBATCH --error /scratch/kapil/slurm-molmo-study2.err  	  # File to which STDERR will be written, %j inserts jobid
+#SBATCH --output /scratch/kapil/slurm-molmo-study2-full.out    # File to which STDOUT will be written, %j inserts jobid
+#SBATCH --error /scratch/kapil/slurm-molmo-study2-full.err  	  # File to which STDERR will be written, %j inserts jobid
 #SBATCH --nodelist bird                                   # run only on birdy
 
 # activate shell
