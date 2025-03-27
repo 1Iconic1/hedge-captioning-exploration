@@ -5,7 +5,7 @@
 #SBATCH --mem 64000        	                              # Reserve 64 GB RAM for the job
 #SBATCH --time 4-00:00    	                              # Max Runtime in D-HH:MM
 #SBATCH --partition liv.p    	                          # Partition to submit to
-#SBATCH --job-name llama_study2                           # The name of the job that is running
+#SBATCH --job-name llama_study2-batch1                           # The name of the job that is running
 #SBATCH --output /scratch/kapil/slurm-llama-study2-batch1.out    # File to which STDOUT will be written, %j inserts jobid
 #SBATCH --error /scratch/kapil/slurm-llama-study2-batch1.err  	  # File to which STDERR will be written, %j inserts jobid
 #SBATCH --nodelist bird                                   # run only on birdy
