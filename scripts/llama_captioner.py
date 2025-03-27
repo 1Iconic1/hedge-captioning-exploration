@@ -85,7 +85,7 @@ def generate_caption(
         generation_config=GenerationConfig(
             max_new_tokens=300,
             stop_strings="<|endoftext|>",
-            use_cache=False,
+            use_cache=True,
             temperature=temperature,
             do_sample=do_sample,
         ),

@@ -85,7 +85,7 @@ def generate_caption(
         inputs,
         GenerationConfig(max_new_tokens=300, stop_strings="<|endoftext|>"),
         tokenizer=processor.tokenizer,
-        use_cache=False,
+        use_cache=True,
         temperature=temperature,
         do_sample=do_sample,
     )
