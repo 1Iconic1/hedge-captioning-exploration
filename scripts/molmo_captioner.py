@@ -3,7 +3,7 @@ import json
 import pandas as pd
 import os
 import copy
-import datetime
+from datetime import datetime
 
 import torch
 from transformers import AutoModelForCausalLM, AutoProcessor, GenerationConfig
@@ -159,7 +159,7 @@ def main():
     output_path = "../data/study-2-output/labeled-data/molmo-caption-output"
     os.makedirs(output_path, exist_ok=True)
     with open(
-        f"{output_path}/caption_output_{len(caption_output)}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json",
+        f"{output_path}/caption_output_{len(caption_output)}_{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}.json",
         "w",
     ) as f:
         json.dump(caption_output, f, indent=4, separators=(",", ": "))
