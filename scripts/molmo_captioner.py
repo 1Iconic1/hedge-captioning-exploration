@@ -21,13 +21,15 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # for multi-GPU systems, force single 
 if torch.cuda.is_available():
     device_map = "cuda:0"  # force single, first GPU
     device_type = "cuda"
+    torch_dtype = "auto"
 elif torch.backends.mps.is_available():
     device_map = "auto"
     device_type = "mps"
+    torch_dtype = torch.bfloat16
 else:
     device_map = "auto"
     device_type = "cpu"
-
+    torch_dtype = torch.bfloat16
 print(f"Using device: {device_type}")
 
 
@@ -36,14 +38,14 @@ model_id = "allenai/Molmo-7B-O-0924"
 processor = AutoProcessor.from_pretrained(
     model_id,
     trust_remote_code=True,
-    torch_dtype="auto",
+    torch_dtype=torch_dtype,
     device_map=device_map,
 )
 
 model = AutoModelForCausalLM.from_pretrained(
     model_id,
     trust_remote_code=True,
-    torch_dtype="auto",
+    torch_dtype=torch_dtype,
     device_map=device_map,
 )
 
@@ -80,15 +82,24 @@ def generate_caption(
     inputs = {k: v.to(model.device).unsqueeze(0) for k, v in inputs.items()}
 
     # generate output; maximum 300 new tokens; stop generation when <|endoftext|> is generated
-    output = ""
-    output = model.generate_from_batch(
-        inputs,
-        GenerationConfig(max_new_tokens=300, stop_strings="<|endoftext|>"),
-        tokenizer=processor.tokenizer,
-        use_cache=True,
-        temperature=temperature,
-        do_sample=do_sample,
-    )
+    def generate_output():
+        return model.generate_from_batch(
+            inputs,
+            GenerationConfig(max_new_tokens=300, stop_strings="<|endoftext|>"),
+            tokenizer=processor.tokenizer,
+            use_cache=True,
+            temperature=temperature,
+            do_sample=do_sample,
+        )
+
+    output = None
+    if device_type == "cuda":
+        output = generate_output()
+    else:
+        with torch.autocast(
+            device_type=device_type, enabled=True, dtype=torch.bfloat16
+        ):
+            output = generate_output()
 
     # only get generated tokens; decode them to text
     generated_tokens = output[0, inputs["input_ids"].size(1) :]
@@ -166,6 +177,7 @@ def main():
     end_index = args.end if args.end is not None else len(dataset_to_caption)
 
     print(f"Generating caption output for {start_index} to {end_index} images...")
+    print(f"Prompt: \n {get_prompt()}")
     caption_output = generate_caption_output(
         dataset_to_caption[start_index:end_index],
         "../data/caption-dataset/train",
