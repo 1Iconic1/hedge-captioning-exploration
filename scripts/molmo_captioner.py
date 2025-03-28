@@ -34,6 +34,7 @@ print(f"Using device: {device_type}")
 
 
 # load model
+model_name = "Molmo-7B-O-0924"
 model_id = "allenai/Molmo-7B-O-0924"
 processor = AutoProcessor.from_pretrained(
     model_id,
@@ -140,16 +141,19 @@ def generate_caption_output(
         image = Image.open(image_file)
 
         # generate caption and store for output
-        caption_output[index]["model_caption"] = generate_caption(
-            image, model, processor, prompt
-        )
+        caption_output[index]["model_captions"] = [
+            {
+                "model_name": model_name,
+                "caption": generate_caption(image, model, processor, prompt),
+            }
+        ]
 
         # save scratch file for every 100 images
         if index % 100 == 0:
             with open(
                 os.path.join(
                     scratch_path,
-                    f"caption_output_start-{start_index}_end-{start_index + index}.json",
+                    f"{model_name}_caption-output_start-{start_index}_end-{start_index + index}.json",
                 ),
                 "w",
             ) as f:
@@ -189,7 +193,7 @@ def main():
     output_path = "../data/study-2-output/labeled-data/molmo-caption-output"
     os.makedirs(output_path, exist_ok=True)
     with open(
-        f"{output_path}/caption_output_{len(caption_output)}-images_start-{start_index}_end-{end_index}_{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}.json",
+        f"{output_path}/{model_name}_caption-output_{len(caption_output)}-images_start-{start_index}_end-{end_index}_{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}.json",
         "w",
     ) as f:
         json.dump(caption_output, f, indent=4, separators=(",", ": "))
