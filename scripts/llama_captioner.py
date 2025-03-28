@@ -65,13 +65,13 @@ def generate_caption(
     """
     # process the image and text
     messages = [
+        {"role": "system", "content": prompt},
         {
             "role": "user",
             "content": [
                 {"type": "image"},
-                prompt,
             ],
-        }
+        },
     ]
 
     input_text = processor.apply_chat_template(messages, add_generation_prompt=True)
@@ -168,6 +168,7 @@ def main():
     end_index = args.end if args.end is not None else len(dataset_to_caption)
 
     print(f"Generating caption output for {start_index} to {end_index} images...")
+    print(f"Prompt: \n {get_prompt()}")
     caption_output = generate_caption_output(
         dataset_to_caption[start_index:end_index],
         "../data/caption-dataset/train",
