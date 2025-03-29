@@ -251,6 +251,7 @@ $RECYCLE.BIN/
 
 *.csv
 *.json
+*.jsonl
 *.jpg
 *.jpeg
 *.png
