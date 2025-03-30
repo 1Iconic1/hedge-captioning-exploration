@@ -1,5 +1,10 @@
 """
 Convert a JSON file with all captioning data into a human-readable CSV.
+
+Example usage:
+python convert_json_to_csv.py \
+    --input ../../data/study-2-output/labeled-data/combined-caption-output/combined-caption-output_7304-images2025-03-29_21:40:00.json \
+    --output ../../data/study-2-output/labeled-data/combined-caption-output/
 """
 
 import os
@@ -82,10 +87,4 @@ def main():
 
 
 if __name__ == "__main__":
-    """
-    Example usage:
-    python convert_json_to_csv.py \
-        --input ../../data/study-2-output/labeled-data/combined-caption-output/combined-caption-output_50-images2025-03-28_17:36:12.json \
-        --output ../../data/study-2-output/labeled-data/combined-caption-output/
-    """
     main()

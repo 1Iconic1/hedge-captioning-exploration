@@ -1,5 +1,12 @@
 """
 Combine the captioning data from the different models into a single file.
+
+Example usage:
+python combine_captioned_data.py \
+    --llama ../../data/study-2-output/labeled-data/llama-caption-output/Llama-3.2-11B-Vision-Instruct_caption-output_7304-images_start-0_end-7304_2025-03-29_00:43:55.json \
+    --molmo ../../data/study-2-output/labeled-data/molmo-caption-output/Molmo-7B-O-0924_caption-output_7304-images_start-0_end-7304_2025-03-28_22:45:36.json \
+    --gpt ../../data/study-2-output/labeled-data/gpt4o-caption-output/gpt-4o-2024-08-06_caption-output_7304-images_start-0_end-7304_2025-03-29_13:29:15.json \
+    --output ../../data/study-2-output/labeled-data/combined-caption-output/
 """
 
 import argparse
@@ -97,12 +104,4 @@ def main():
 
 
 if __name__ == "__main__":
-    """
-    Example usage:
-    python combine_captioned_data.py \
-        --llama ../../data/study-2-output/labeled-data/llama-caption-output/Llama-3.2-11B-Vision-Instruct_caption-output_50-images_start-0_end-50_2025-03-28_14:59:14.json \
-        --molmo ../../data/study-2-output/labeled-data/molmo-caption-output/Molmo-7B-O-0924_caption-output_50-images_start-0_end-50_2025-03-28_15:09:09.json \
-        --gpt ../../data/study-2-output/labeled-data/gpt4o-caption-output/gpt-4o-2024-08-06_caption-output_50-images_start-0_end-50_2025-03-28_14:53:14.json \
-        --output ../../data/study-2-output/labeled-data/combined-caption-output/
-    """
     main()
