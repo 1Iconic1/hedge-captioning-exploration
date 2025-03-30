@@ -76,7 +76,7 @@ def save_combined_data(data, output_path):
     # save the data
     output_file_path = os.path.join(
         output_path,
-        f"combined-caption-output_{len(data)}-images{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}.json",
+        f"combined-caption-output_{len(data)}-images_{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}.json",
     )
     with open(output_file_path, "w") as f:
         json.dump(data, f, indent=4)
