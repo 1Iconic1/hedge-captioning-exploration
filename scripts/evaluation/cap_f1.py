@@ -104,8 +104,7 @@ def save_results_json(output_path, org_dataset=None, T_atomics=None, g_atomics=N
                     metric_name: {
                         "T_atomics": [
                             line.strip()
-                            for t in T_atomics
-                            for line in t.get("atomic_captions", [])
+                            for line in T_atomics[i].get("atomic_captions", [])
                             if line.strip()
                         ] if T_atomics else [],
                         "g_atomics": model_outputs,
