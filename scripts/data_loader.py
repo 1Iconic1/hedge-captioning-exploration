@@ -107,21 +107,16 @@ def generate_target_dataset(caption_dataset_filename, image_quality_dataset_file
         curr_rejected = row["is_rejected"]
 
         # expand captions
+        human_captions = []
         for caption_index in range(0, len(curr_captions)):
-            # expand caption
-            image_captioning_input[index][f"human_caption_{caption_index + 1}"] = (
-                curr_captions[caption_index]
-            )
+            curr_human_caption = {
+                "caption": curr_captions[caption_index],
+                "is_precanned": curr_precanned[caption_index],
+                "is_rejected": curr_rejected[caption_index],
+            }
+            human_captions.append(curr_human_caption)
 
-            # expand caption
-            image_captioning_input[index][f"is_precanned_{caption_index + 1}"] = (
-                curr_precanned[caption_index]
-            )
-
-            # expand caption
-            image_captioning_input[index][f"is_rejected_{caption_index + 1}"] = (
-                curr_rejected[caption_index]
-            )
+        image_captioning_input[index]["human_captions"] = human_captions
 
         # remove old rows
         del image_captioning_input[index]["caption"]
@@ -155,7 +150,6 @@ def filter_dataset(
     Output:
     - (list of dict): filtered image annotations and image quality.
     """
-    # print(image_captioning_input)
     # select images where 3 or more people could provide a caption (unrecognizable < 3)
     target_subset_df = image_captioning_input[
         image_captioning_input["unrecognizable"] < 3
@@ -169,3 +163,12 @@ def filter_dataset(
 
     # return filtered dataset
     return target_subset_df.to_dict(orient="records")
+
+
+if __name__ == "__main__":
+    image_captioning_input = generate_target_dataset(
+        "../data/caption-dataset/annotations/train.json",
+        "../data/image-quality-assessment/annotations/train.json",
+    )
+    filtered_dataset = filter_dataset(pd.DataFrame.from_dict(image_captioning_input))
+    print(json.dumps(filtered_dataset[0], indent=4))
