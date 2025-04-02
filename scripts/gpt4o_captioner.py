@@ -13,6 +13,8 @@ from tqdm import tqdm
 from constants import get_prompt
 from data_loader import generate_target_dataset, filter_dataset
 
+model_name = "gpt-4o-2024-08-06"
+
 
 # captioning function
 def generate_caption(image_url, openai_client, prompt, temperature=1.0):
@@ -28,7 +30,7 @@ def generate_caption(image_url, openai_client, prompt, temperature=1.0):
     - (str): caption for image.
     """
     response = openai_client.responses.create(
-        model="gpt-4o-2024-08-06",
+        model=model_name,
         input=[
             {
                 "role": "system",
@@ -93,16 +95,19 @@ def generate_caption_output(
         image_url = caption_output[index]["vizwiz_url"]
 
         # generate caption and store for output
-        caption_output[index]["model_caption"] = generate_caption(
-            image_url, openai_client, prompt
-        )
+        caption_output[index]["model_captions"] = [
+            {
+                "model_name": model_name,
+                "caption": generate_caption(image_url, openai_client, prompt),
+            }
+        ]
 
         # save scratch file for every 100 images
         if index % 100 == 0:
             with open(
                 os.path.join(
                     scratch_path,
-                    f"caption_output_start-{start_index}_end-{start_index + index}.json",
+                    f"{model_name}_caption-output_start-{start_index}_end-{start_index + index}.json",
                 ),
                 "w",
             ) as f:
@@ -146,7 +151,7 @@ def main():
     output_path = "../data/study-2-output/labeled-data/gpt4o-caption-output"
     os.makedirs(output_path, exist_ok=True)
     with open(
-        f"{output_path}/caption_output_{len(caption_output)}-images_start-{start_index}_end-{end_index}_{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}.json",
+        f"{output_path}/{model_name}_caption-output_{len(caption_output)}-images_start-{start_index}_end-{end_index}_{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}.json",
         "w",
     ) as f:
         json.dump(caption_output, f, indent=4, separators=(",", ": "))
