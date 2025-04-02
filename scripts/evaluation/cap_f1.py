@@ -155,51 +155,68 @@ def save_results_json(output_path, org_dataset=None, T_atomics=None, g_atomics=N
     print(f"Saved JSON to: {output_path}")
 
 
-def call_gpt4o(system_message, user_message, output_format=AtomicSentences):
-    completion = client.beta.chat.completions.parse(
-        model="gpt-4o-2024-08-06",
-        temperature=1,
-        response_format=output_format,
-        messages=[
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": user_message}
-        ]
-    )
-    return json.loads(completion.choices[0].message.content)
+def call_gpt4o(system_message, user_message, output_format=None):
+    if output_format==None:
+       completion = client.beta.chat.completions.parse(
+            model="gpt-4o-2024-08-06",
+            temperature=0.3,
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message}
+            ]
+        ) 
+       return completion.choices[0].message.content
+    else:
+        completion = client.beta.chat.completions.parse(
+            model="gpt-4o-2024-08-06",
+            temperature=1,
+            response_format=output_format,
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message}
+            ]
+        )
+        return json.loads(completion.choices[0].message.content)
 
 def parse_atomic_statements(captions):
     """
     Call GPT to convert given captions into atomic statements.
     """
     system_message = (
-        "You are an assistant that extracts fully atomic visual facts from image captions designed to output JSON. "
+        "You are an assistant that extracts fully atomic objective facts from image captions designed to output JSON. "
+    )
+
+    user_message = (
         "Your task is to: "
         "1. Break each caption into fully atomic statements, each expressing exactly one simple and objective fact.\n"
         "2. Each atomic statement must describe only one idea: either object existence, attribute (like color or material), position, or relationship.\n"
         "3. Do not use compound or complex sentences. Avoid words like 'and', 'but', or commas that connect multiple facts.\n"
         "4. Remove any subjective, inferred, or emotional content. Keep only visually verifiable facts.\n"
         "5. Return each atomic statement as a single plain sentence, one per line, without numbering or bullet points.\n\n"
-    )
-
-    user_message = (
         "Please convert the following captions into atomic statements.\n"
         "Captions:\n"
         + "\n".join(captions)
     )
 
-    return call_gpt4o(system_message, user_message)
-
+    return call_gpt4o(system_message, user_message, AtomicSentences)
 
 def remove_duplicate_atomic_statements(captions):
     """
     Call GPT to remove duplicate atomic statements using system/user message separation.
     """
     system_message = (
-        "You are a helpful assistant that removes semantically redundant or overlapping atomic statements. Design to output JSON. "
-        "Each atomic statement expresses a single visual fact from an image. "
-        "Only keep one sentence per unique fact, and prefer the clearest or most specific version if two are similar. "
-        "Do not rewrite or merge sentences. Just delete duplicates. "
-        "Return each atomic statement as a single plain sentence, one per line, without numbering or bullet points."
+        "You are a helpful assistant that removes semantically redundant or overlapping atomic statements. Designed to output clean and non-redundant visual facts in JSON format.\n\n"
+        
+        "Each atomic statement expresses a single visual fact from an image.\n"
+        
+        "Instructions:\n"
+        "- Only remove a statement if its **entire meaning** is fully captured by another statement.\n"
+        "- If two statements are phrased differently but express the **same visual fact**, keep only the clearest or most specific version.\n"
+        "- If two statements are similar in wording but describe **different facts**, keep both.\n"
+        "- Do not rewrite, rephrase, or merge statements. Just delete exact or semantically overlapping ones.\n\n"
+        
+        "Output:\n"
+        "Return the final list as plain text — one sentence per line, without numbering or bullet points."
     )
 
     user_message = (
@@ -207,42 +224,101 @@ def remove_duplicate_atomic_statements(captions):
         + "\n".join(captions)
     )
 
-    return call_gpt4o(system_message, user_message)
+    return call_gpt4o(system_message, user_message, AtomicSentences)
+
+
+
+def calculate_recall_gptttttt(T_atomics, g_atomics):
+    """
+    Call GPT to evaluate semantic recall between human-written (T_atomics) 
+    and model-generated (g_atomics) atomic statements.
+    """
+
+    TPs = []
+    FNs = []
+    system_message = (
+        "You are an assistant that determines whether a model-generated atomic statement is semantically matched by any of the human-written atomic statements.\n\n"
+        
+        "Instructions:\n"
+        "1. You will be given ONE generated atomic statement and a LIST of human-written atomic statements.\n"
+        "2. Your task is to determine whether the generated statement is clearly and explicitly stated in any human-written statement.\n"
+        "3. Do NOT assume, infer, guess, or rely on common sense. Do NOT treat vague or partial matches as valid.\n"
+        "4. Only return True if the same meaning is expressed in writing in at least one human-written statement.\n"
+        "5. Otherwise, return False.\n\n"
+        
+        "Output:\n"
+        "Only return the word 'True' or 'False'. Do NOT include explanations, justifications, formatting, or any additional text."
+    )
+
+
+    print(T_atomics)
+    for g_atomic in g_atomics:
+        user_message = (
+            "Human-written atomic statements:\n" +
+            "\n".join(T_atomics) +
+            "\n\nGenerated atomic statement:\n" +
+            "\n".join(g_atomic)
+        )
+        result = call_gpt4o(system_message, user_message)
+        print(f"{g_atomic} : {result}")
+        if result == 'True':
+            TPs.append(g_atomic)
+        else:
+            FNs.append(g_atomic)
+    
+    return {
+        "TPs": TPs, 
+        "FNs": FNs,
+        "Counts": {
+            "TPs": len(TPs),
+            "FNs": len(FNs)
+        }
+    }
 
 def calculate_recall_gpt(T_atomics, g_atomics):
     """
-    Call GPT to evaluate recall between human (T_atomics) and generated (g_atomics) atomic statements.
+    Call GPT to evaluate semantic recall between human-written (T_atomics) 
+    and model-generated (g_atomics) atomic statements.
     """
+
     system_message = (
-        "You are an assistant that evaluates the semantic recall of a model's generated atomic statements against a ground truth set of human-written atomic statements.\n\n"
-
-        "Definitions:\n"
-        "- True Positive (TP): A human-written atomic statement whose meaning is correctly captured in any of the model's generated atomic statements.\n"
-        "- False Negative (FN): A human-written atomic statement that is not reflected in any of the model's generated statements.\n\n"
-
-        "Instructions:\n"
-        "1. For each human-written atomic statement, check whether any generated statement captures its meaning.\n"
-        "2. If yes, include it in the TP list.\n"
-        "3. If not, include it in the FN list.\n"
-        "4. Ignore extra information in the generated statements — only evaluate whether each human-written statement is successfully captured.\n"
-        "5. Do not assume or infer facts that are not explicitly present in the statements.\n\n"
-
-        "Return a JSON object with:\n"
-        "- \"TPs\": list of human-written statements that were matched (true positives).\n"
-        "- \"FNs\": list of human-written statements that were missed (false negatives).\n"
-        "- \"Counts\": a dictionary with the number of TP and FN statements.\n\n"
-
-        "Only return the JSON object. Do NOT include explanations or any markdown formatting."
+        "You are an assistant tasked with determining the semantic equivalence between two sets of atomic sentences. "
+        "The first set consists of atomic statements extracted from human-written sentences. "
+        "The second set consists of atomic statements extracted from AI-generated sentences. "
+        "The goal of this task is to calculate recall metrics. "
+        "I will provide you with the definitions of True Positives (TP) and False Negatives (FN). "
+        "Provide your response in JSON format."
     )
 
     user_message = (
+        "Definitions:\n"
+        "- True Positive (TP): A human-written atomic statement whose meaning is clearly captured by at least one generated atomic statement.\n"
+        "- False Negative (FN): A human-written atomic statement that is not captured or reflected in any generated statement.\n\n"
+
+        "Instructions:\n"
+        "1. For each human-written atomic statement, check whether any of the model-generated statements express the same core meaning.\n"
+        "2. If so, include the human-written statement in the True Positives (TPs).\n"
+        "3. If no generated statement captures the meaning, include the human-written statement in the False Negatives (FNs).\n"
+        "4. Do NOT include any generated statements in the output.\n"
+        "5. Do NOT make assumptions or inferences beyond what is clearly stated.\n\n"
+
         "Human-written atomic statements:\n" +
         "\n".join(T_atomics) +
         "\n\nGenerated atomic statements:\n" +
-        "\n".join(g_atomics)
-    )
+        "\n".join(g_atomics) 
+        
+        + "\n\n Return a JSON object in the following format:\n"
+        "{\n"
+        "  \"TPs\": [list of human-written statements that are matched],\n"
+        "  \"FNs\": [list of human-written statements that are not matched],\n"
+        "  \"Counts\": {\"TP\": number, \"FN\": number}\n"
+        "}\n\n"
+
+        "Again, ONLY include the human-written statements in TPs and FNs. Do NOT include any generated statements. "
+        "Only return the JSON object. Do NOT include any explanations or markdown formatting."    )
 
     return call_gpt4o(system_message, user_message, Recall)
+
 
 def calculate_precision_gpt(human_captions, g_atomics):
     """
@@ -250,8 +326,15 @@ def calculate_precision_gpt(human_captions, g_atomics):
     """
 
     system_message = (
-        "You are an assistant that evaluates the **semantic precision** of atomic statements generated by a model based on human-written image captions.\n\n"
+        "You are an assistant tasked with determining the semantic equivalence between two sets of sentences. "
+        "The first set consists of human-written sentences. "
+        "The second set consists of atomic statements extracted from AI-generated sentences. "
+        "The goal of this task is to calculate precision metrics. "
+        "I will provide you with the definitions of True Positives (TP) and False Positive (FP). "
+        "Provide your response in JSON format."
+    )
 
+    user_message = (
         "Definitions:\n"
         "- True Positive (TP): A generated atomic statement that is semantically supported by, or reasonably implied by, at least one human-written caption. Exact wording is not required.\n"
         "- False Positive (FP): A generated atomic statement that introduces information not present in, or contradictory to, any of the human-written captions.\n\n"
@@ -263,19 +346,17 @@ def calculate_precision_gpt(human_captions, g_atomics):
         "4. Accept paraphrased or partially matching statements as TP if the core meaning aligns.\n"
         "5. Do not make assumptions based on common knowledge, visual conventions, or brand familiarity unless explicitly mentioned in the captions.\n\n"
 
-        "Return a JSON object in the following format:\n"
+        "Human-written captions:\n" +
+        "\n".join(f"- {caption}" for caption in human_captions) +
+        "\n\nGenerated atomic statements:\n" +
+        "\n".join(f"- {statement}" for statement in g_atomics)
+
+        +"\n\n Return a JSON object in the following format:\n"
         "- \"TPs\": a list of true positive generated atomic statements.\n"
         "- \"FPs\": a list of false positive generated atomic statements.\n"
         "- \"Counts\": a dictionary with the number of TP and FP statements.\n\n"
 
         "Only return the JSON object. Do NOT include any explanations or markdown formatting."
-    )
-
-    user_message = (
-        "Human-written captions:\n" +
-        "\n".join(f"- {caption}" for caption in human_captions) +
-        "\n\nGenerated atomic statements:\n" +
-        "\n".join(f"- {statement}" for statement in g_atomics)
     )
 
     return call_gpt4o(system_message, user_message, Precision)
@@ -330,44 +411,44 @@ def generate_atomic_statement(org_caption, limit=2):
 
     return T_atomics, g_atomics
 
-def evaluate_matching_file(parsed_dataset):
-    eval_outputs = []
+# def evaluate_matching_file(parsed_dataset):
+#     eval_outputs = []
 
-    for item in tqdm(parsed_dataset):
-        T_org = item["human_captions"]
-        T_atomics = item["evaluation"]["cap_f1"]["T_atomics"]
-        g_atomics = item["evaluation"]["cap_f1"]["g_atomics"]
+#     for item in tqdm(parsed_dataset):
+#         T_org = item["human_captions"]
+#         T_atomics = item["evaluation"]["cap_f1"]["T_atomics"]
+#         g_atomics = item["evaluation"]["cap_f1"]["g_atomics"]
 
-        model_outputs = []
-        for g_item in g_atomics:
+#         model_outputs = []
+#         for g_item in g_atomics:
 
-            model_name = g_item
-            g_captions = g_atomics[g_item]
+#             model_name = g_item
+#             g_captions = g_atomics[g_item]
 
-            recall_result = calculate_recall_gpt(T_atomics, g_captions) 
-            precision_result = calculate_precision_gpt(T_org, g_captions) 
+#             recall_result = calculate_recall_gpt(T_atomics, g_captions) 
+#             precision_result = calculate_precision_gpt(T_org, g_captions) 
 
-            try:
-                recall_parsed_result = json.loads(recall_result)
-                precision_parsed_result = json.loads(precision_result)
-            except json.JSONDecodeError:
-                print(f"Failed to parse recall result. {recall_result}")
-                print(f"Failed to parse precision result. {precision_result}")
-                recall_parsed_result = {}
-                precision_parsed_result = {}
+#             try:
+#                 recall_parsed_result = json.loads(recall_result)
+#                 precision_parsed_result = json.loads(precision_result)
+#             except json.JSONDecodeError:
+#                 print(f"Failed to parse recall result. {recall_result}")
+#                 print(f"Failed to parse precision result. {precision_result}")
+#                 recall_parsed_result = {}
+#                 precision_parsed_result = {}
 
-            # print(json.dumps(recall_parsed_result, indent=4, ensure_ascii=False))
-            # print(json.dumps(precision_parsed_result, indent=4, ensure_ascii=False))
+#             # print(json.dumps(recall_parsed_result, indent=4, ensure_ascii=False))
+#             # print(json.dumps(precision_parsed_result, indent=4, ensure_ascii=False))
 
-            model_outputs.append({
-                "model_name": model_name,
-                "recall": recall_parsed_result,
-                "precision": precision_parsed_result
-            })
+#             model_outputs.append({
+#                 "model_name": model_name,
+#                 "recall": recall_parsed_result,
+#                 "precision": precision_parsed_result
+#             })
     
-        eval_outputs.append(model_outputs)
+#         eval_outputs.append(model_outputs)
 
-    return eval_outputs
+#     return eval_outputs
 
 def evaluate_matching(T_org, T_atomics, g_atomics):
     eval_outputs = []
@@ -382,9 +463,10 @@ def evaluate_matching(T_org, T_atomics, g_atomics):
             model_name = g_item["model_name"]
             g_captions = g_item["atomic_captions"]
 
-            recall_result = calculate_recall_gpt(T_atomic, g_captions) 
+            # print(json.dumps(T_atomic['atomic_captions'], indent=4, ensure_ascii=False))
+            # print(json.dumps(g_captions, indent=4, ensure_ascii=False))
+            recall_result = calculate_recall_gpt(T_atomic['atomic_captions'], g_captions) 
             precision_result = calculate_precision_gpt(T_org[i], g_captions) 
-
             model_outputs.append({
                 "model_name": model_name,
                 "recall": recall_result,
