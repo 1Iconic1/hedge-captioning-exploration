@@ -27,6 +27,9 @@ torchvision = "*"
 bitsandbytes = "*"
 seaborn = "*"
 openai = "*"
+evaluate = "*"
+nltk = "*"
+rouge-score = "*"
 
 [dev-packages]
 black = {extras = ["jupyter"], version = "*"}
