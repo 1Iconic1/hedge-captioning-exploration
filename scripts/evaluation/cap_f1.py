@@ -191,15 +191,24 @@ def save_results_json(
 
 
 def call_gpt4o(system_message, user_message, output_format=None):
-    if output_format == None:
-        completion = client.beta.chat.completions.parse(
+
+    if output_format is None:
+        completion = client.beta.chat.completions.create(
+
             model="gpt-4o-2024-08-06",
             temperature=0.2,
             messages=[
                 {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message},
-            ],
+                {"role": "user", "content": user_message}
+            ]
         )
+
+        # # print amount of tokens used
+        # print("Prompt tokens:", completion.usage.prompt_tokens)
+        # print("Completion tokens:", completion.usage.completion_tokens)
+        # print("Total tokens:", completion.usage.total_tokens)
+
+
         return completion.choices[0].message.content
     else:
         completion = client.beta.chat.completions.parse(
@@ -211,6 +220,12 @@ def call_gpt4o(system_message, user_message, output_format=None):
                 {"role": "user", "content": user_message},
             ],
         )
+
+        # # print amount of tokens used 
+        # print("Prompt tokens:", completion.usage.prompt_tokens)
+        # print("Completion tokens:", completion.usage.completion_tokens)
+        # print("Total tokens:", completion.usage.total_tokens)
+
         return json.loads(completion.choices[0].message.content)
 
 
