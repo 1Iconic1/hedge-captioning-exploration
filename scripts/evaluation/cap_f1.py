@@ -295,12 +295,22 @@ def calculate_recall_gpt(T_atomics, g_atomics):
         "- True Positive (TP): A human-written atomic statement whose meaning is clearly captured by at least one generated atomic statement.\n"
         "- False Negative (FN): A human-written atomic statement that is not captured or reflected in any generated statement.\n\n"
 
+        # "Instructions:\n"
+        # "1. For each human-written atomic statement, check whether any of the model-generated statements express the same core meaning.\n"
+        # "2. If so, include the human-written statement in the True Positives (TPs).\n"
+        # "3. If no generated statement captures the meaning, include the human-written statement in the False Negatives (FNs).\n"
+        # "4. Do NOT include any generated statements in the output.\n"
+        # "5. Do NOT make assumptions or inferences beyond what is clearly stated.\n\n"
+
+        # # This is linear instruction
         "Instructions:\n"
         "1. For each human-written atomic statement, check whether any of the model-generated statements express the same core meaning.\n"
-        "2. If so, include the human-written statement in the True Positives (TPs).\n"
-        "3. If no generated statement captures the meaning, include the human-written statement in the False Negatives (FNs).\n"
-        "4. Do NOT include any generated statements in the output.\n"
-        "5. Do NOT make assumptions or inferences beyond what is clearly stated.\n\n"
+        "2. If the meaning is directly stated or clearly implied (without requiring external knowledge or creative inference), include the human-written statement in the True Positives (TPs).\n"
+        "3. If the meaning is not directly stated or clearly implied, include the human-written statement in the False Negatives (FNs).\n"
+        "4. Use common-sense understanding when deciding if the meaning is implied — for example, if a title or visual element is described, it's reasonable to assume the cover is visible.\n"
+        "5. Do NOT include any model-generated statements in the output.\n"
+        "6. Avoid using outside knowledge or making assumptions beyond what is explicitly or clearly implied in the statements.\n\n"
+
 
         "Human-written atomic statements:\n" +
         "\n".join(T_atomics) +
@@ -411,46 +421,38 @@ def generate_atomic_statement(org_caption, limit=2):
 
     return T_atomics, g_atomics
 
-# def evaluate_matching_file(parsed_dataset):
-#     eval_outputs = []
+def evaluate_matching_file(parsed_dataset, print_mode = False):
+    eval_outputs = []
 
-#     for item in tqdm(parsed_dataset):
-#         T_org = item["human_captions"]
-#         T_atomics = item["evaluation"]["cap_f1"]["T_atomics"]
-#         g_atomics = item["evaluation"]["cap_f1"]["g_atomics"]
+    for item in tqdm(parsed_dataset):
+        T_org = item["human_captions"]
+        T_atomics = item["evaluation"]["cap_f1"]["T_atomics"]
+        g_atomics = item["evaluation"]["cap_f1"]["g_atomics"]
 
-#         model_outputs = []
-#         for g_item in g_atomics:
+        model_outputs = []
+        for i, g_item in enumerate(g_atomics):
 
-#             model_name = g_item
-#             g_captions = g_atomics[g_item]
+            model_name = g_item
+            g_captions = g_atomics[g_item]
 
-#             recall_result = calculate_recall_gpt(T_atomics, g_captions) 
-#             precision_result = calculate_precision_gpt(T_org, g_captions) 
+            if print_mode:
+                print(json.dumps(T_atomics, indent=4, ensure_ascii=False))
+                print(json.dumps(T_org, indent=4, ensure_ascii=False))
+                print(json.dumps(g_captions, indent=4, ensure_ascii=False))
 
-#             try:
-#                 recall_parsed_result = json.loads(recall_result)
-#                 precision_parsed_result = json.loads(precision_result)
-#             except json.JSONDecodeError:
-#                 print(f"Failed to parse recall result. {recall_result}")
-#                 print(f"Failed to parse precision result. {precision_result}")
-#                 recall_parsed_result = {}
-#                 precision_parsed_result = {}
-
-#             # print(json.dumps(recall_parsed_result, indent=4, ensure_ascii=False))
-#             # print(json.dumps(precision_parsed_result, indent=4, ensure_ascii=False))
-
-#             model_outputs.append({
-#                 "model_name": model_name,
-#                 "recall": recall_parsed_result,
-#                 "precision": precision_parsed_result
-#             })
+            recall_result = calculate_recall_gpt(T_atomics, g_captions) 
+            precision_result = calculate_precision_gpt(T_org, g_captions) 
+            model_outputs.append({
+                "model_name": model_name,
+                "recall": recall_result,
+                "precision": precision_result
+            })
     
-#         eval_outputs.append(model_outputs)
+        eval_outputs.append(model_outputs)
 
-#     return eval_outputs
+    return eval_outputs
 
-def evaluate_matching(T_org, T_atomics, g_atomics):
+def evaluate_matching(T_org, T_atomics, g_atomics, print_mode=False):
     eval_outputs = []
 
     for i in tqdm(range(len(T_atomics))):
@@ -463,8 +465,10 @@ def evaluate_matching(T_org, T_atomics, g_atomics):
             model_name = g_item["model_name"]
             g_captions = g_item["atomic_captions"]
 
-            # print(json.dumps(T_atomic['atomic_captions'], indent=4, ensure_ascii=False))
-            # print(json.dumps(g_captions, indent=4, ensure_ascii=False))
+            if print_mode:
+                print("T atomics \n", json.dumps(T_atomic['atomic_captions'], indent=4, ensure_ascii=False))
+                print("T original \n", json.dumps(T_org[i], indent=4, ensure_ascii=False))
+                print(f"{model_name} g atomics \n",json.dumps(g_captions, indent=4, ensure_ascii=False))
             recall_result = calculate_recall_gpt(T_atomic['atomic_captions'], g_captions) 
             precision_result = calculate_precision_gpt(T_org[i], g_captions) 
             model_outputs.append({
@@ -507,22 +511,22 @@ def calculate_cap_f1(evaluation):
         total_output.append(model_outputs)
     return total_output
 
-def calculate_cap_f1_file(evaluation):
-    for item in evaluation:
-        for model_name, model_scores in item["evaluation"]["cap_f1"]["scores"].items():
-            print(f"Model: {model_name}")
-            print(json.dumps(model_scores, indent=4, ensure_ascii=False))
+# def calculate_cap_f1_file(evaluation):
+#     for item in evaluation:
+#         for model_name, model_scores in item["evaluation"]["cap_f1"]["scores"].items():
+#             print(f"Model: {model_name}")
+#             print(json.dumps(model_scores, indent=4, ensure_ascii=False))
 
-            precision_TP = model_scores["precision"]["Counts"]["TP"]
-            precision_FP = model_scores["precision"]["Counts"]["FP"]
-            recall_TP = model_scores["recall"]["Counts"]["TP"]
-            recall_FN = model_scores["recall"]["Counts"]["FN"]
+#             precision_TP = model_scores["precision"]["Counts"]["TP"]
+#             precision_FP = model_scores["precision"]["Counts"]["FP"]
+#             recall_TP = model_scores["recall"]["Counts"]["TP"]
+#             recall_FN = model_scores["recall"]["Counts"]["FN"]
 
-            precision = precision_TP / (precision_TP + precision_FP) if (precision_TP + precision_FP) != 0 else 0
-            recall = recall_TP / (recall_TP + recall_FN) if (recall_TP + recall_FN) != 0 else 0
-            cap_f1 = 2 * precision * recall / (precision + recall) if (precision + recall) != 0 else 0
+#             precision = precision_TP / (precision_TP + precision_FP) if (precision_TP + precision_FP) != 0 else 0
+#             recall = recall_TP / (recall_TP + recall_FN) if (recall_TP + recall_FN) != 0 else 0
+#             cap_f1 = 2 * precision * recall / (precision + recall) if (precision + recall) != 0 else 0
 
-            print(f"precision: {precision:.4f}, recall: {recall:.4f}, cap_f1: {cap_f1:.4f}")
+#             print(f"precision: {precision:.4f}, recall: {recall:.4f}, cap_f1: {cap_f1:.4f}")
 
 
 def get_others(org_caption_dataset, human_captions, limit=2):
@@ -555,23 +559,7 @@ def get_others(org_caption_dataset, human_captions, limit=2):
     return eval_outputs
 
 def main():
-    print("Read caption json file...")
-    keys = ["file_name", "human_captions", "model_captions"]
-    org_caption_dataset = read_json("test_org.json", keys)
-
-    print("Generating atomic statements...")
-    T_atomics, g_atomics  = generate_atomic_statement(org_caption_dataset)
-    save_results_json(output_path="parsed_caption.json", org_dataset=org_caption_dataset, T_atomics=T_atomics, g_atomics=g_atomics)
-
-    keys = ["file_name", "human_captions", "T_atomics", "model_captions", "g_atomics"]
-    parsed_dataset = read_json("parsed_caption.json", keys)
-
-    evaluation = evaluate_matching(parsed_dataset)
-    save_results_json(output_path="final_with_evaluation.json", update_existing="parsed_caption.json", evaluations=evaluation)
-
-    keys = ["file_name", "human_captions", "T_atomics", "model_captions", "g_atomics", "evaluation"]
-    eval_dataset = read_json("final_with_evaluation.json", keys)
-    calculate_cap_f1(eval_dataset)
+    print("see pipeline.ipynb")
 
 
 if __name__ == "__main__":
