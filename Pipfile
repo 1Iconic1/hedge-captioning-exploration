@@ -30,6 +30,7 @@ openai = "*"
 evaluate = "*"
 nltk = "*"
 rouge-score = "*"
+bert-score = "*"
 
 [dev-packages]
 black = {extras = ["jupyter"], version = "*"}
