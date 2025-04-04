@@ -28,6 +28,7 @@ class RecallCounts(BaseModel):
 class Recall(BaseModel):
     TPs: list[str]
     FNs: list[str]
+    Match: list[str]
     Counts: RecallCounts
 
 
@@ -39,10 +40,11 @@ class PrecisionCounts(BaseModel):
 class Precision(BaseModel):
     TPs: list[str]
     FPs: list[str]
+    Match: list[str]
     Counts: PrecisionCounts
 
 
-def read_json(caption_file, keys):
+def read_json(caption_file, keys=None):
     """
     Read JSON file and extract only the specified keys.
 
@@ -56,12 +58,12 @@ def read_json(caption_file, keys):
     with open(caption_file, "r", encoding="utf-8") as f:
         caption_dataset_json = json.load(f)
 
-    parsed_data = []
+    if keys is None:
+        return caption_dataset_json
 
+    parsed_data = []
     for item in caption_dataset_json:
-        parsed_item = {}
-        for key in keys:
-            parsed_item[key] = item[key]
+        parsed_item = {key: item[key] for key in keys if key in item}
         parsed_data.append(parsed_item)
 
     return parsed_data
@@ -76,7 +78,7 @@ def save_results_json(
     evaluations=None,
     metric_name="cap_f1",
     update_existing=None,
-    limit=2,
+    limit=None,
 ):
     """
     Save image caption + atomic statements + optional evaluation info to a JSON file.
@@ -90,22 +92,24 @@ def save_results_json(
     - evaluations: list of dicts with recall, precision, cap_f1 or other metrics (optional)
     - metric_name: the evaluation metric name (e.g., "cap_f1", "BLEU", "METEOR", "ROUGE")
     - update_existing: path to existing parsed json if you're only appending evaluation
+    - limit: maximum number of items to process (None = process all)
     """
     results = []
 
     if update_existing:
         with open(update_existing, "r", encoding="utf-8") as f:
             results = json.load(f)
-    else:
-        for i, item in enumerate(org_dataset[:limit] if limit else org_dataset):
-            human_captions = [
-                hc["caption"] if isinstance(hc, dict) else hc
-                for hc in item["human_captions"]
-                if (hc["caption"] if isinstance(hc, dict) else hc)
-                != "Quality issues are too severe to recognize visual content."
-            ]
+    elif org_dataset:
+        results = org_dataset[:limit] if limit else org_dataset
 
-            model_outputs = {}
+        for i, item in enumerate(results):
+            if T_atomics:
+                item["evaluation"].setdefault("cap_f1", {})["T_atomics"] = [
+                    line.strip()
+                    for line in T_atomics[i].get("atomic_captions", [])
+                    if line.strip()
+                ]
+
             if g_atomics:
                 model_outputs = {
                     model_entry["model_name"]: [
@@ -115,28 +119,7 @@ def save_results_json(
                     ]
                     for model_entry in g_atomics[i]
                 }
-
-            result_item = {
-                "file_name": item.get("file_name"),
-                "human_captions": human_captions,
-                "model_captions": item["model_captions"],
-                "evaluation": {
-                    metric_name: {
-                        "T_atomics": (
-                            [
-                                line.strip()
-                                for line in T_atomics[i].get("atomic_captions", [])
-                                if line.strip()
-                            ]
-                            if T_atomics
-                            else []
-                        ),
-                        "g_atomics": model_outputs,
-                        "scores": {},
-                    }
-                },
-            }
-            results.append(result_item)
+                item["evaluation"].setdefault("cap_f1", {})["g_atomics"] = model_outputs
 
     if metadata:
         for i in range(min(len(results), len(metadata))):
@@ -155,9 +138,7 @@ def save_results_json(
                         "Counts": model_eval.get("precision", {}).get("Counts", {}),
                     },
                 }
-            results[i]["evaluation"].setdefault(metric_name, {})[
-                "metadata"
-            ] = metric_scores
+            results[i]["evaluation"].setdefault(metric_name, {})["metadata"] = metric_scores
 
     if evaluations and metric_name == "cap_f1":
         for i in range(len(results)):
@@ -173,22 +154,11 @@ def save_results_json(
                 }
             results[i]["evaluation"][metric_name]["scores"] = metric_scores
 
-    if evaluations and metric_name != "cap_f1":
-        for i in range(min(len(results), len(evaluations))):
-            eval_list = (
-                evaluations[i] if isinstance(evaluations[i], list) else evaluations
-            )
-            for model_eval in eval_list:
-                model_name = model_eval["model_name"]
-                for sub_metric in ["BLEU", "METEOR", "ROUGE", "CIDEr"]:
-                    results[i].setdefault("evaluation", {}).setdefault(
-                        sub_metric, {}
-                    ).setdefault("scores", {})[model_name] = model_eval.get(sub_metric)
-
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=4, ensure_ascii=False)
 
     print(f"Saved JSON to: {output_path}")
+
 
 
 def check_consistency(model_name, T_atomics, g_captions, recall_TP, recall_FN, precision_TP, precision_FP):
