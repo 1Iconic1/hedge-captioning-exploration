@@ -4,6 +4,7 @@ import pandas as pd
 from openai import OpenAI
 import os
 import evaluate
+from collections import Counter
 
 # from cider.cider import Cider
 from tqdm import tqdm
@@ -188,6 +189,27 @@ def save_results_json(
         json.dump(results, f, indent=4, ensure_ascii=False)
 
     print(f"Saved JSON to: {output_path}")
+
+
+def check_consistency(model_name, T_atomics, g_captions, recall_TP, recall_FN, precision_TP, precision_FP):
+    total_recall = recall_TP + recall_FN
+    total_precision = precision_TP + precision_FP
+
+    # Recall consistency
+    if sorted(total_recall) != sorted(T_atomics):
+        print(f"Error: Recall mismatch for model [{model_name}]")
+        print(f"length {len(T_atomics)} vs {len(total_recall)}")
+        print(f"T atomics:\n{T_atomics}")
+        print(f"Recall TPs:\n{recall_TP}")
+        print(f"Recall FNs:\n{recall_FN}")
+
+    # Precision consistency
+    if sorted(total_precision) != sorted(g_captions):
+        print(f"Error: Precision mismatch for model [{model_name}]")
+        print(f"length {len(g_captions)} vs {len(total_precision)}")
+        print(f"G atomics:\n{g_captions}")
+        print(f"Precision TPs:\n{precision_TP}")
+        print(f"Precision FPs:\n{precision_FP}")
 
 
 def call_gpt4o(system_message, user_message, output_format=None, temperature=0.2):
@@ -378,9 +400,10 @@ def calculate_recall_gpt(T_atomics, g_atomics):
         "1. For each human-written atomic statement, check whether any of the model-generated statements express the same core meaning.\n"
         "2. If the meaning is directly stated or clearly implied (without requiring external knowledge or creative inference), include the human-written statement in the True Positives (TPs).\n"
         "3. If the meaning is not directly stated or clearly implied, include the human-written statement in the False Negatives (FNs).\n"
-        "4. Use common-sense understanding when deciding if the meaning is implied — for example, if a title or visual element is described, it's reasonable to assume the cover is visible.\n"
-        "5. Do NOT include any model-generated statements in the output.\n"
-        "6. Avoid using outside knowledge or making assumptions beyond what is explicitly or clearly implied in the statements.\n\n"
+        "4. The sum of the number of TPs and FNs should equal the number of human-written atomic statements.\n"
+        "5. Use common-sense understanding when deciding if the meaning is implied — for example, if a title or visual element is described, it's reasonable to assume the cover is visible.\n"
+        "6. Do NOT include any model-generated statements in the output.\n"
+        "7. Avoid using outside knowledge or making assumptions beyond what is explicitly or clearly implied in the statements.\n\n"
         "Provide your response in JSON format."
     )
 
@@ -450,7 +473,8 @@ def calculate_precision_gpt(human_captions, g_atomics):
         "2. If the core meaning of a generated statement is explicitly stated or reasonably implied by any human-written caption, mark it as a True Positive (TP).\n"
         "3. If the statement includes details that are not found or are contradicted by the captions, mark it as a False Positive (FP).\n"
         "4. Accept paraphrased or partially matching statements as TP if the core meaning aligns.\n"
-        "5. Do not make assumptions based on common knowledge, visual conventions, or brand familiarity unless explicitly mentioned in the captions.\n\n"
+        "5. Do not make assumptions based on common knowledge, visual conventions, or brand familiarity unless explicitly mentioned in the captions.\n"
+        "6. When listing TPs and FPs, you must use the exact original string of the generated atomic statements. Do not paraphrase, shorten, fix grammar, or modify in any way. The response must copy the sentence exactly as shown.\n\n"
         "Provide your response in JSON format."
     )
 
@@ -460,8 +484,8 @@ def calculate_precision_gpt(human_captions, g_atomics):
         + "\n\nGenerated atomic statements:\n"
         + "\n".join(f"- {statement}" for statement in g_atomics)
         + "\n\n Return a JSON object in the following format:\n"
-        '- "TPs": a list of true positive generated atomic statements.\n'
-        '- "FPs": a list of false positive generated atomic statements.\n'
+        '- "TPs": a list of true positive generated atomic statements. Each item must be copied exactly from the list above.\n'
+        '- "FPs": a list of false positive generated atomic statements. Each item must be copied exactly from the list above.\n'
         '- "Counts": a dictionary with the number of TP and FP statements.\n\n'
         "Only return the JSON object. Do NOT include any explanations or markdown formatting."
     )
@@ -522,6 +546,30 @@ def generate_atomic_statement(org_caption, limit=2):
 
     return T_atomics, g_atomics
 
+def evaluate_single_instance(model_name, T_atomics, T_original, g_captions, print_mode=False):
+    if print_mode:
+        print("T atomics \n", json.dumps(T_atomics, indent=4, ensure_ascii=False))
+        print("T original \n", json.dumps(T_original, indent=4, ensure_ascii=False))
+        print(f"{model_name} g atomics \n", json.dumps(g_captions, indent=4, ensure_ascii=False))
+
+    recall_result = calculate_recall_gpt(T_atomics, g_captions)
+    precision_result = calculate_precision_gpt(T_original, g_captions)
+
+    check_consistency(
+        model_name=model_name,
+        T_atomics=T_atomics,
+        g_captions=g_captions,
+        recall_TP=recall_result["TPs"],
+        recall_FN=recall_result["FNs"],
+        precision_TP=precision_result["TPs"],
+        precision_FP=precision_result["FPs"]
+    )
+
+    return {
+        "model_name": model_name,
+        "recall": recall_result,
+        "precision": precision_result,
+    }
 
 def evaluate_matching_file(parsed_dataset, print_mode=False):
     eval_outputs = []
@@ -532,41 +580,11 @@ def evaluate_matching_file(parsed_dataset, print_mode=False):
         g_atomics = item["evaluation"]["cap_f1"]["g_atomics"]
 
         model_outputs = []
-        for i, g_item in enumerate(g_atomics):
-
-            model_name = g_item
-            g_captions = g_atomics[g_item]
-
-            if print_mode:
-                print(json.dumps(T_atomics, indent=4, ensure_ascii=False))
-                print(json.dumps(T_org, indent=4, ensure_ascii=False))
-                print(json.dumps(g_captions, indent=4, ensure_ascii=False))
-
-            recall_result = calculate_recall_gpt(T_atomics, g_captions)
-            precision_result = calculate_precision_gpt(T_org, g_captions)
-
-            model_outputs.append(
-                {
-                    "model_name": model_name,
-                    "recall": recall_result,
-                    "precision": precision_result,
-                }
+        for model_name, g_captions in g_atomics.items():
+            output = evaluate_single_instance(
+                model_name, T_atomics, T_org, g_captions, print_mode
             )
-
-            recall_TP = len(recall_result["TPs"])
-            recall_FN = len(recall_result["FNs"])
-
-            precision_TP = len(precision_result["TPs"])
-            precision_FP = len(precision_result["FPs"])
-
-            if len(T_atomics) != (recall_TP + recall_FN):
-                print("Error, the recall count is wrong ")
-                print(f"length of T atomics {len(T_atomics)}")
-                print(f"sum of recall TP+FN {recall_TP+recall_FN}")
-            if len(g_captions) != (precision_TP + precision_FP):
-                print("Error, the precision count is wrong ")
-                print(f"length of g atomics {len(g_captions)}")
-                print(f"sum of precision TP+FP {precision_TP + precision_FP}")
+            model_outputs.append(output)
 
         eval_outputs.append(model_outputs)
 
@@ -577,61 +595,23 @@ def evaluate_matching(T_org, T_atomics, g_atomics, print_mode=False):
     eval_outputs = []
 
     for i in tqdm(range(len(T_atomics))):
-        T_atomic = T_atomics[i]
+        T_atomic = T_atomics[i]["atomic_captions"]
         g_atomic = g_atomics[i]
+        T_original = T_org[i]
 
         model_outputs = []
-
         for g_item in g_atomic:
             model_name = g_item["model_name"]
             g_captions = g_item["atomic_captions"]
 
-            if print_mode:
-                print(
-                    "T atomics \n",
-                    json.dumps(
-                        T_atomic["atomic_captions"], indent=4, ensure_ascii=False
-                    ),
-                )
-                print(
-                    "T original \n", json.dumps(T_org[i], indent=4, ensure_ascii=False)
-                )
-                print(
-                    f"{model_name} g atomics \n",
-                    json.dumps(g_captions, indent=4, ensure_ascii=False),
-                )
-
-            recall_result = calculate_recall_gpt(
-                T_atomic["atomic_captions"], g_captions
+            output = evaluate_single_instance(
+                model_name, T_atomic, T_original, g_captions, print_mode
             )
-            precision_result = calculate_precision_gpt(T_org[i], g_captions)
-            model_outputs.append(
-                {
-                    "model_name": model_name,
-                    "recall": recall_result,
-                    "precision": precision_result,
-                }
-            )
-
-            recall_TP = len(recall_result["TPs"])
-            recall_FN = len(recall_result["FNs"])
-
-            precision_TP = len(precision_result["TPs"])
-            precision_FP = len(precision_result["FPs"])
-
-            if len(T_atomics) != (recall_TP + recall_FN):
-                print("ERRRRRRRORRRRRRRRRR the recall count is wrong ")
-                print(f"length of T atomics {len(T_atomics)}")
-                print(f"sum of recall TP+FN {recall_TP+recall_FN}")
-            if len(g_captions) != (precision_TP + precision_FP):
-                print("ERRRRRRRORRRRRRRRRR the precision count is wrong ")
-                print(f"length of g atomics {len(g_captions)}")
-                print(f"sum of precision TP+FP {precision_TP + precision_FP}")
+            model_outputs.append(output)
 
         eval_outputs.append(model_outputs)
 
     return eval_outputs
-
 
 def calculate_cap_f1(evaluation):
     total_output = []
