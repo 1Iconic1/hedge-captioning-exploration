@@ -389,7 +389,7 @@ def calculate_recall_gpt(T_atomics, g_atomics):
         "Again, ONLY include the human-written statements in TPs and FNs. Do NOT include any generated statements. "
         "Only return the JSON object. Do NOT include any explanations or markdown formatting."
     )
-
+    
     return call_gpt4o(system_message, user_message, Recall)
 
 
@@ -534,6 +534,7 @@ def evaluate_matching_file(parsed_dataset, print_mode=False):
 
             recall_result = calculate_recall_gpt(T_atomics, g_captions)
             precision_result = calculate_precision_gpt(T_org, g_captions)
+
             model_outputs.append(
                 {
                     "model_name": model_name,
@@ -541,6 +542,21 @@ def evaluate_matching_file(parsed_dataset, print_mode=False):
                     "precision": precision_result,
                 }
             )
+
+            recall_TP = len(recall_result["TPs"])
+            recall_FN = len(recall_result["FNs"])
+
+            precision_TP = len(precision_result["TPs"])
+            precision_FP = len(precision_result["FPs"])
+            
+            if len(T_atomics) != (recall_TP+recall_FN):
+                print("Error, the recall count is wrong ") 
+                print(f"length of T atomics {len(T_atomics)}")
+                print(f"sum of recall TP+FN {recall_TP+recall_FN}")
+            if len(g_captions) != (precision_TP + precision_FP):
+                print("Error, the precision count is wrong ") 
+                print(f"length of g atomics {len(g_captions)}")
+                print(f"sum of precision TP+FP {precision_TP + precision_FP}")
 
         eval_outputs.append(model_outputs)
 
@@ -574,6 +590,7 @@ def evaluate_matching(T_org, T_atomics, g_atomics, print_mode=False):
                     f"{model_name} g atomics \n",
                     json.dumps(g_captions, indent=4, ensure_ascii=False),
                 )
+
             recall_result = calculate_recall_gpt(
                 T_atomic["atomic_captions"], g_captions
             )
@@ -585,6 +602,21 @@ def evaluate_matching(T_org, T_atomics, g_atomics, print_mode=False):
                     "precision": precision_result,
                 }
             )
+
+            recall_TP = len(recall_result["TPs"])
+            recall_FN = len(recall_result["FNs"])
+
+            precision_TP = len(precision_result["TPs"])
+            precision_FP = len(precision_result["FPs"])
+            
+            if len(T_atomics) != (recall_TP+recall_FN):
+                print("ERRRRRRRORRRRRRRRRR the recall count is wrong ") 
+                print(f"length of T atomics {len(T_atomics)}")
+                print(f"sum of recall TP+FN {recall_TP+recall_FN}")
+            if len(g_captions) != (precision_TP + precision_FP):
+                print("ERRRRRRRORRRRRRRRRR the precision count is wrong ") 
+                print(f"length of g atomics {len(g_captions)}")
+                print(f"sum of precision TP+FP {precision_TP + precision_FP}")
 
         eval_outputs.append(model_outputs)
 
