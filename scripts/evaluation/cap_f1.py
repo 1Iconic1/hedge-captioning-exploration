@@ -190,17 +190,27 @@ def save_results_json(
     print(f"Saved JSON to: {output_path}")
 
 
-def call_gpt4o(system_message, user_message, output_format=None):
+def call_gpt4o(system_message, user_message, temperature=0.2, output_format=None):
+    """
+    Calls GPT-4o to generate a response.
 
+    Args:
+        system_message (str): The system message to send to GPT-4o.
+        user_message (str): The user message to send to GPT-4o.
+        temperature (float, optional): The temperature to use for the response. Defaults to 0.2.
+        output_format (Pydantic model, optional): The output format to use for the response. Defaults to None. Use this to force a specific output format, like a JSON object.
+
+    Returns:
+        str: The response from GPT-4o. Either as an unstructured string (if output_format is None) or a JSON-parsable object (if output_format is a Pydantic model).
+    """
     if output_format is None:
         completion = client.beta.chat.completions.create(
-
             model="gpt-4o-2024-08-06",
-            temperature=0.2,
+            temperature=temperature,
             messages=[
                 {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message}
-            ]
+                {"role": "user", "content": user_message},
+            ],
         )
 
         # # print amount of tokens used
@@ -208,12 +218,11 @@ def call_gpt4o(system_message, user_message, output_format=None):
         # print("Completion tokens:", completion.usage.completion_tokens)
         # print("Total tokens:", completion.usage.total_tokens)
 
-
         return completion.choices[0].message.content
     else:
         completion = client.beta.chat.completions.parse(
             model="gpt-4o-2024-08-06",
-            temperature=0.2,
+            temperature=temperature,
             response_format=output_format,
             messages=[
                 {"role": "system", "content": system_message},
@@ -221,7 +230,7 @@ def call_gpt4o(system_message, user_message, output_format=None):
             ],
         )
 
-        # # print amount of tokens used 
+        # # print amount of tokens used
         # print("Prompt tokens:", completion.usage.prompt_tokens)
         # print("Completion tokens:", completion.usage.completion_tokens)
         # print("Total tokens:", completion.usage.total_tokens)
@@ -389,7 +398,7 @@ def calculate_recall_gpt(T_atomics, g_atomics):
         "Again, ONLY include the human-written statements in TPs and FNs. Do NOT include any generated statements. "
         "Only return the JSON object. Do NOT include any explanations or markdown formatting."
     )
-    
+
     return call_gpt4o(system_message, user_message, Recall)
 
 
@@ -548,13 +557,13 @@ def evaluate_matching_file(parsed_dataset, print_mode=False):
 
             precision_TP = len(precision_result["TPs"])
             precision_FP = len(precision_result["FPs"])
-            
-            if len(T_atomics) != (recall_TP+recall_FN):
-                print("Error, the recall count is wrong ") 
+
+            if len(T_atomics) != (recall_TP + recall_FN):
+                print("Error, the recall count is wrong ")
                 print(f"length of T atomics {len(T_atomics)}")
                 print(f"sum of recall TP+FN {recall_TP+recall_FN}")
             if len(g_captions) != (precision_TP + precision_FP):
-                print("Error, the precision count is wrong ") 
+                print("Error, the precision count is wrong ")
                 print(f"length of g atomics {len(g_captions)}")
                 print(f"sum of precision TP+FP {precision_TP + precision_FP}")
 
@@ -608,13 +617,13 @@ def evaluate_matching(T_org, T_atomics, g_atomics, print_mode=False):
 
             precision_TP = len(precision_result["TPs"])
             precision_FP = len(precision_result["FPs"])
-            
-            if len(T_atomics) != (recall_TP+recall_FN):
-                print("ERRRRRRRORRRRRRRRRR the recall count is wrong ") 
+
+            if len(T_atomics) != (recall_TP + recall_FN):
+                print("ERRRRRRRORRRRRRRRRR the recall count is wrong ")
                 print(f"length of T atomics {len(T_atomics)}")
                 print(f"sum of recall TP+FN {recall_TP+recall_FN}")
             if len(g_captions) != (precision_TP + precision_FP):
-                print("ERRRRRRRORRRRRRRRRR the precision count is wrong ") 
+                print("ERRRRRRRORRRRRRRRRR the precision count is wrong ")
                 print(f"length of g atomics {len(g_captions)}")
                 print(f"sum of precision TP+FP {precision_TP + precision_FP}")
 
