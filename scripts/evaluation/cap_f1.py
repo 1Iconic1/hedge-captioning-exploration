@@ -190,7 +190,7 @@ def save_results_json(
     print(f"Saved JSON to: {output_path}")
 
 
-def call_gpt4o(system_message, user_message, temperature=0.2, output_format=None):
+def call_gpt4o(system_message, user_message, output_format=None, temperature=0.2):
     """
     Calls GPT-4o to generate a response.
 
@@ -254,7 +254,7 @@ def parse_atomic_statements(captions):
 
     user_message = (
         "Please convert the following captions into atomic statements.\n"
-        "Captions:\n" + "\n".join(captions)
+        "Caption: " + captions
     )
 
     return call_gpt4o(system_message, user_message, AtomicSentences)
@@ -492,6 +492,7 @@ def generate_atomic_statement(org_caption, limit=2):
             if hc["caption"]
             != "Quality issues are too severe to recognize visual content."
         ]
+
         human_atomic_captions = []
         for hc in human_captions:
             human_atomic_captions.append(parse_atomic_statements(hc))
@@ -507,7 +508,7 @@ def generate_atomic_statement(org_caption, limit=2):
         for mc in item["model_captions"]:
             model_name = mc["model_name"]
             model_caption = mc["caption"]
-            atomic_result = parse_atomic_statements([model_caption])
+            atomic_result = parse_atomic_statements(model_caption)
 
             model_results.append(
                 {
