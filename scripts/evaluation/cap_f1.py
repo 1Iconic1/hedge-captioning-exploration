@@ -281,42 +281,42 @@ def remove_duplicate_atomic_statements(captions):
     return call_gpt4o(system_message, user_message, AtomicSentences)
 
 
-def calculate_recall_gptttttt(T_atomics, g_atomics):
-    """
-    Call GPT to evaluate semantic recall between human-written (T_atomics)
-    and model-generated (g_atomics) atomic statements.
-    """
+# def calculate_recall_gptttttt(T_atomics, g_atomics):
+#     """
+#     Call GPT to evaluate semantic recall between human-written (T_atomics)
+#     and model-generated (g_atomics) atomic statements.
+#     """
 
-    TPs = []
-    FNs = []
-    system_message = (
-        "You are an assistant that determines whether a model-generated atomic statement is semantically matched by any of the human-written atomic statements.\n\n"
-        "Instructions:\n"
-        "1. You will be given ONE generated atomic statement and a LIST of human-written atomic statements.\n"
-        "2. Your task is to determine whether the generated statement is clearly and explicitly stated in any human-written statement.\n"
-        "3. Do NOT assume, infer, guess, or rely on common sense. Do NOT treat vague or partial matches as valid.\n"
-        "4. Only return True if the same meaning is expressed in writing in at least one human-written statement.\n"
-        "5. Otherwise, return False.\n\n"
-        "Output:\n"
-        "Only return the word 'True' or 'False'. Do NOT include explanations, justifications, formatting, or any additional text."
-    )
+#     TPs = []
+#     FNs = []
+#     system_message = (
+#         "You are an assistant that determines whether a model-generated atomic statement is semantically matched by any of the human-written atomic statements.\n\n"
+#         "Instructions:\n"
+#         "1. You will be given ONE generated atomic statement and a LIST of human-written atomic statements.\n"
+#         "2. Your task is to determine whether the generated statement is clearly and explicitly stated in any human-written statement.\n"
+#         "3. Do NOT assume, infer, guess, or rely on common sense. Do NOT treat vague or partial matches as valid.\n"
+#         "4. Only return True if the same meaning is expressed in writing in at least one human-written statement.\n"
+#         "5. Otherwise, return False.\n\n"
+#         "Output:\n"
+#         "Only return the word 'True' or 'False'. Do NOT include explanations, justifications, formatting, or any additional text."
+#     )
 
-    print(T_atomics)
-    for g_atomic in g_atomics:
-        user_message = (
-            "Human-written atomic statements:\n"
-            + "\n".join(T_atomics)
-            + "\n\nGenerated atomic statement:\n"
-            + "\n".join(g_atomic)
-        )
-        result = call_gpt4o(system_message, user_message)
-        print(f"{g_atomic} : {result}")
-        if result == "True":
-            TPs.append(g_atomic)
-        else:
-            FNs.append(g_atomic)
+#     print(T_atomics)
+#     for g_atomic in g_atomics:
+#         user_message = (
+#             "Human-written atomic statements:\n"
+#             + "\n".join(T_atomics)
+#             + "\n\nGenerated atomic statement:\n"
+#             + "\n".join(g_atomic)
+#         )
+#         result = call_gpt4o(system_message, user_message)
+#         print(f"{g_atomic} : {result}")
+#         if result == "True":
+#             TPs.append(g_atomic)
+#         else:
+#             FNs.append(g_atomic)
 
-    return {"TPs": TPs, "FNs": FNs, "Counts": {"TPs": len(TPs), "FNs": len(FNs)}}
+#     return {"TPs": TPs, "FNs": FNs, "Counts": {"TPs": len(TPs), "FNs": len(FNs)}}
 
 
 def calculate_recall_gpt(T_atomics, g_atomics):
