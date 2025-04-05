@@ -32,6 +32,8 @@ nltk = "*"
 rouge-score = "*"
 bert-score = "*"
 pydantic = "*"
+sentence-transformers = "*"
+scikit-learn = "*"
 
 [dev-packages]
 black = {extras = ["jupyter"], version = "*"}
