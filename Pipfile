@@ -34,6 +34,7 @@ bert-score = "*"
 pydantic = "*"
 sentence-transformers = "*"
 scikit-learn = "*"
+pingouin = "*"
 
 [dev-packages]
 black = {extras = ["jupyter"], version = "*"}
