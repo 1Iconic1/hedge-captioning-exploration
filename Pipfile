@@ -35,6 +35,9 @@ pydantic = "*"
 sentence-transformers = "*"
 scikit-learn = "*"
 pingouin = "*"
+protobuf = "*"
+sentencepiece = "*"
+tiktoken = "*"
 
 [dev-packages]
 black = {extras = ["jupyter"], version = "*"}
