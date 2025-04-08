@@ -1,3 +1,14 @@
+"""
+Usage
+For high-quality images:
+python llama_captioner.py \
+    --input-file "../data/study-2-input/high-quality-image_iq-1_text-no-text.json" \
+    --output-dir "../data/study-2-output/labeled-data/high-quality-images/llama-caption-output" \
+    --scratch-path "../data/scratch/study-2/llama-caption-output" \
+    --start 0 \
+    --end 10
+"""
+
 # Libraries
 import argparse
 import json
@@ -153,41 +164,99 @@ def generate_caption_output(
     return caption_output
 
 
-def main():
-    # load data
-    print("Generating target dataset...")
-    dataset_to_caption = generate_target_dataset(
-        "../data/caption-dataset/annotations/train.json",
-        "../data/image-quality-assessment/annotations/train.json",
+def parse_args():
+    parser = argparse.ArgumentParser()
+
+    # get the file to caption
+    parser.add_argument(
+        "--input-file",
+        type=str,
+        default=None,
+        help="Path to the input file to caption, as JSON file. If not entered, default dataset will be used.",
     )
-    dataset_to_caption = filter_dataset(pd.DataFrame.from_dict(dataset_to_caption))
-    print(f"Filtered dataset of {len(dataset_to_caption)} images.")
+
+    # where to save file
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Path to the output file to save the caption output, as JSON file. If not entered, caption output will be saved to the input file's directory.",
+    )
+
+    # where to save scratch files
+    parser.add_argument(
+        "--scratch-path",
+        type=str,
+        default=None,
+        help="Path to the scratch folder where intermediate files will be stored.",
+    )
 
     # get the start and ending index of the dataset to caption
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--start", type=int, default=0)
-    parser.add_argument("--end", type=int, default=None)
+    parser.add_argument(
+        "--start", type=int, default=0, help="Start index of the dataset to caption."
+    )
+    parser.add_argument(
+        "--end",
+        type=int,
+        default=None,
+        help="End index of the dataset to caption. If not entered, entire dataset will be captioned",
+    )
     args = parser.parse_args()
+
+    return args
+
+
+def main():
+    # get arguments
+    args = parse_args()
+
+    # load data from input file if specified
+    if args.input_file is not None:
+        dataset_to_caption = json.load(open(args.input_file))
+    else:
+        # default dataset
+        print("Generating target dataset...")
+        dataset_to_caption = generate_target_dataset(
+            "../data/caption-dataset/annotations/train.json",
+            "../data/image-quality-assessment/annotations/train.json",
+        )
+        dataset_to_caption = filter_dataset(pd.DataFrame.from_dict(dataset_to_caption))
+        print(f"Filtered dataset of {len(dataset_to_caption)} images.")
+
+    # get the start and ending index of the dataset to caption
     start_index = args.start
     end_index = args.end if args.end is not None else len(dataset_to_caption)
 
+    # generate output
     print(f"Generating caption output for {start_index} to {end_index} images...")
     print(f"Prompt: \n {get_prompt()}")
+    scratch_path = (
+        args.scratch_path
+        if args.scratch_path is not None
+        else "../data/scratch/study-2/llama-caption-output"
+    )
     caption_output = generate_caption_output(
         dataset_to_caption[start_index:end_index],
         "../data/caption-dataset/train",
-        "../data/scratch/study-2/llama-caption-output",
+        scratch_path,
         start_index,
     )
 
-    # save caption output
-    output_path = "../data/study-2-output/labeled-data/llama-caption-output"
-    os.makedirs(output_path, exist_ok=True)
-    with open(
-        f"{output_path}/{model_name}_caption-output_{len(caption_output)}-images_start-{start_index}_end-{end_index}_{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}.json",
-        "w",
-    ) as f:
+    # generate output path
+    if args.output_dir is not None:
+        output_dir = args.output_dir
+    else:
+        output_dir = os.path.dirname(args.input_file)
+    os.makedirs(output_dir, exist_ok=True)
+
+    output_filename = f"{model_name}_caption-output_{len(dataset_to_caption)}-images_start-{start_index}_end-{end_index}_{datetime.now().strftime('%Y-%m-%d_%H:%M')}.json"
+
+    # save caption output by combining output path and filename
+    output_path = os.path.join(output_dir, output_filename)
+    with open(output_path, "w") as f:
         json.dump(caption_output, f, indent=4, separators=(",", ": "))
+
+    print(f"Captioning complete.Caption output saved to {output_path}")
 
 
 if __name__ == "__main__":
