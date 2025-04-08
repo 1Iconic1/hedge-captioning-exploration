@@ -68,10 +68,69 @@ def read_json(caption_file, keys=None):
 
     return parsed_data
 
+# pick images to test if needed
+
+import json
+
+def select_data(image_list_file, json_file, output_file, prev = False):
+    """
+    Read txt file that has selected filenames and filter json items based on that.
+
+    Inputs:
+    - image_list_file: path to txt file containing selected filenames (one per line)
+    - json_file: path to json file containing dataset (each item must have 'filename' key)
+    - output_file: path to save filtered json
+
+    Output:
+    - A new JSON file with filtered items
+    """
+    # Load the selected filenames from txt file
+    with open(image_list_file, "r", encoding="utf-8") as f:
+        selected_filenames = set(line.strip() for line in f if line.strip())
+
+    # Load the full dataset from json file
+    with open(json_file, "r", encoding="utf-8") as f:
+        caption_dataset_json = json.load(f)
+
+    # Filter and modify the dataset
+    parsed_data = []
+
+
+
+    for item in caption_dataset_json:
+        if item.get("file_name") in selected_filenames:
+            modified_item = item.copy()
+
+            if prev:                
+                if "evaluation" in modified_item:
+                    eval_data = modified_item["evaluation"]
+
+                    # Remove T_atomics from previous_cap_f1 if it exists
+                    if "previous_cap_f1" in eval_data:
+                        eval_data["previous_cap_f1"].pop("T_atomics", None)
+
+                    # Merge contents of cap_f1 into previous_cap_f1
+                    if "cap_f1" in eval_data:
+                        cap_f1_data = eval_data.pop("cap_f1")
+                        if "previous_cap_f1" not in eval_data:
+                            eval_data["previous_cap_f1"] = {}
+                        eval_data["previous_cap_f1"].update(cap_f1_data)
+
+            parsed_data.append(modified_item)
+
+
+    # Save filtered data
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(parsed_data, f, indent=2, ensure_ascii=False)
+
+    print(f"{len(parsed_data)} data, JSON {output_file} created with {len(parsed_data)} items.")
+
+
 
 def save_results_json(
     output_path,
     org_dataset=None,
+    parsed_T= None,
     T_atomics=None,
     g_atomics=None,
     metadata=None,
@@ -103,6 +162,13 @@ def save_results_json(
         results = org_dataset[:limit] if limit else org_dataset
 
         for i, item in enumerate(results):
+            if parsed_T:
+                item["evaluation"].setdefault("cap_f1", {})["parsed_atomics"] = [
+                    line.strip()
+                    for line in parsed_T[i]
+                    if line.strip()
+                ]
+
             if T_atomics:
                 item["evaluation"].setdefault("cap_f1", {})["T_atomics"] = [
                     line.strip()
@@ -141,7 +207,7 @@ def save_results_json(
             results[i]["evaluation"].setdefault(metric_name, {})["metadata"] = metric_scores
 
     if evaluations and metric_name == "cap_f1":
-        for i in range(len(results)):
+        for i in range(min(len(results), len(evaluations))):
             metric_scores = (
                 results[i]["evaluation"]
                 .setdefault(metric_name, {})
@@ -202,6 +268,7 @@ def call_gpt4o(system_message, user_message, output_format=None, temperature=0.2
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_message},
+
             ],
         )
 
@@ -227,6 +294,35 @@ def call_gpt4o(system_message, user_message, output_format=None, temperature=0.2
         # print("Completion tokens:", completion.usage.completion_tokens)
         # print("Total tokens:", completion.usage.total_tokens)
 
+        return json.loads(completion.choices[0].message.content)
+
+
+def call_gpt4o_assist(messages, output_format=None, temperature=0.2):
+    """
+    Calls GPT-4o to generate a response using a full list of messages.
+
+    Args:
+        messages (list): A list of dicts containing role/content pairs (e.g., system, user, assistant).
+        temperature (float, optional): Sampling temperature. Defaults to 0.2.
+        output_format (Pydantic model, optional): If provided, parse the output into this format.
+
+    Returns:
+        str or parsed object: The GPT-4o output as plain text or parsed JSON (if output_format is provided).
+    """
+    if output_format is None:
+        completion = client.beta.chat.completions.create(
+            model="gpt-4o-2024-08-06",
+            temperature=temperature,
+            messages=messages,
+        )
+        return completion.choices[0].message.content
+    else:
+        completion = client.beta.chat.completions.parse(
+            model="gpt-4o-2024-08-06",
+            temperature=temperature,
+            response_format=output_format,
+            messages=messages,
+        )
         return json.loads(completion.choices[0].message.content)
 
 
@@ -260,10 +356,11 @@ def remove_duplicate_atomic_statements(captions):
         "You are a helpful assistant that removes semantically redundant or overlapping atomic statements. Designed to output clean and non-redundant visual facts in JSON format.\n\n"
         "Each atomic statement expresses a single visual fact from an image.\n"
         "Instructions:\n"
-        "- Only remove a statement if its **entire meaning** is fully captured by another statement.\n"
-        "- If two statements are phrased differently but express the **same visual fact**, keep only the clearest or most specific version.\n"
-        "- If two statements are similar in wording but describe **different facts**, keep both.\n"
-        "- Do not rewrite, rephrase, or merge statements. Just delete exact or semantically overlapping ones.\n\n"
+        "1. Only remove a statement if its **entire meaning** is fully captured by another statement.\n"
+        "2. If multiple statements refer to the same object using different terms (e.g., 'bottle', 'container', 'pack'), treat them as referring to the same object and keep only the most specific and informative ones.\n"
+        # "2. If two statements are phrased differently but express the **same visual fact**, keep only the clearest or most specific version.\n"
+        "3. If two statements are similar in wording but describe **different facts**, keep both.\n"
+        "4. Do not rewrite, rephrase, or merge statements. Just delete exact or semantically overlapping ones.\n\n"
         "Output:\n"
         "Return the final list as plain text — one sentence per line, without numbering or bullet points."
     )
@@ -272,91 +369,145 @@ def remove_duplicate_atomic_statements(captions):
 
     return call_gpt4o(system_message, user_message, AtomicSentences)
 
+def remove_duplicate_atomic_statements_fewshot(captions):
+    """
+    Call GPT to remove duplicate atomic statements using system/user message separation with updated few-shot examples.
+    """
+    system_message = {
+        "role": "system",
+        "content": (
+            "You are a helpful assistant that removes semantically redundant or overlapping atomic statements. "
+            "Designed to output clean and non-redundant visual facts.\n\n"
+            "Each atomic statement expresses a single visual fact from an image.\n"
+            "Instructions:\n"
+            "1. Only remove a statement if its **entire meaning** is fully captured by another statement.\n"
+            "2. If multiple statements refer to the same object using different terms (e.g., 'bottle', 'container', 'pack'), treat them as referring to the same object and keep only the most specific and informative ones.\n"
+            "3. If two statements are phrased differently but express the **same visual fact**, keep only the clearest or most specific version.\n"
+            "4. If two statements are similar in wording but describe **different facts**, keep both.\n"
+            "5. Do not rewrite, rephrase, or merge statements. Just delete exact or semantically overlapping ones.\n\n"
+            "Output:\n"
+            "Return the final list as plain text — one sentence per line, without numbering or bullet points."
+        )
+    }
 
-# def calculate_recall_gptttttt(T_atomics, g_atomics):
-#     """
-#     Call GPT to evaluate semantic recall between human-written (T_atomics)
-#     and model-generated (g_atomics) atomic statements.
-#     """
+    few_shot_examples = [
+        # Example 1: VizWiz_train_00000283.jpg
+        {
+            "role": "user",
+            "content": (
+                "Atomic Statements:\n"
+                "The canned food has a yellow label.\n"
+                "The canned food has a green label.\n"
+                "The canned food has a red label.\n"
+                "The canned food is on a wooden surface.\n"
+                "The can contains spaghetti sauce.\n"
+                "The spaghetti sauce is traditional style.\n"
+                "The can is 15 ounces.\n"
+                "The can is 425 grams.\n"
+                "There is a small can.\n"
+                "The can has a picture on it.\n"
+                "The picture shows red pasta sauce.\n"
+                "The picture shows noodles.\n"
+                "The can is on a table.\n"
+                "The can is yellow.\n"
+                "The can is of national brand.\n"
+                "The can contains tomato paste.\n"
+                "The can is sitting on a counter.\n"
+                "The table is made of wood."
+            )
+        },
+        {
+            "role": "assistant",
+            "content": (
+                "The canned food has a yellow label.\n"
+                "The canned food has a green label.\n"
+                "The canned food has a red label.\n"
+                "The canned food is on a wooden surface.\n"
+                "The picture shows red pasta sauce.\n"
+                "The spaghetti sauce is traditional style.\n"
+                "The can is 15 ounces.\n"
+                "The can is 425 grams.\n"
+                "The can has a picture on it.\n"
+                "The picture shows noodles.\n"
+                "The can is of national brand."
+            )
+        },
+        # Example 2: VizWiz_train_00000196.jpg
+        {
+            "role": "user",
+            "content": (
+                "Atomic Statements:\n"
+                "There is a red box.\n"
+                "The box is labeled Kaffe.\n"
+                "The box is next to a washing machine.\n"
+                "The package contains ground coffee.\n"
+                "The coffee is raspberry flavored.\n"
+                "The brand of the coffee is Gevalia Kaffe.\n"
+                "The box contains Gevalia coffee.\n"
+                "The coffee is Raspberry Danish flavored.\n"
+                "The box is on a table."
+            )
+        },
+        {
+            "role": "assistant",
+            "content": (
+                "There is a red box.\n"
+                "The box is next to a washing machine.\n"
+                "The package contains ground coffee.\n"
+                "The coffee is raspberry flavored.\n"
+                "The brand of the coffee is Gevalia Kaffe.\n"
+                "The box is on a table."
+            )
+        },
+        # Example 3: VizWiz_train_00000457.jpg
+        {
+            "role": "user",
+            "content": (
+                "Atomic Statements:\n"
+                "There is a bottle.\n"
+                "The bottle contains shoe polish.\n"
+                "The shoe polish is for leather shoes.\n"
+                "The shoe polish is made by a company called Kiwi.\n"
+                "There is a container.\n"
+                "The container is of Kiwi leather shiner.\n"
+                "The container is being held up.\n"
+                "There is a product called KIWI brand shoe polish.\n"
+                "The shoe polish is for leather.\n"
+                "The shoe polish is labeled as 'premiere shine'.\n"
+                "The shoe polish is labeled as 'ultra brilliant'.\n"
+                "There is a liquid.\n"
+                "The liquid can be used for food."
+            )
+        },
+        {
+            "role": "assistant",
+            "content": (
+                "There is a bottle.\n"
+                "The bottle contains shoe polish.\n"
+                "The shoe polish is for leather shoes.\n"
+                "The shoe polish is made by a company called Kiwi.\n"
+                "The container is being held up.\n"
+                "The shoe polish is labeled as 'premiere shine'.\n"
+                "The shoe polish is labeled as 'ultra brilliant'.\n"
+                "There is a liquid.\n"
+                "The liquid can be used for food."
+            )
+        }
+    ]
 
-#     TPs = []
-#     FNs = []
-#     system_message = (
-#         "You are an assistant that determines whether a model-generated atomic statement is semantically matched by any of the human-written atomic statements.\n\n"
-#         "Instructions:\n"
-#         "1. You will be given ONE generated atomic statement and a LIST of human-written atomic statements.\n"
-#         "2. Your task is to determine whether the generated statement is clearly and explicitly stated in any human-written statement.\n"
-#         "3. Do NOT assume, infer, guess, or rely on common sense. Do NOT treat vague or partial matches as valid.\n"
-#         "4. Only return True if the same meaning is expressed in writing in at least one human-written statement.\n"
-#         "5. Otherwise, return False.\n\n"
-#         "Output:\n"
-#         "Only return the word 'True' or 'False'. Do NOT include explanations, justifications, formatting, or any additional text."
-#     )
+    user_message = {
+        "role": "user",
+        "content": "Atomic Statements:\n" + "\n".join(captions)
+    }
 
-#     print(T_atomics)
-#     for g_atomic in g_atomics:
-#         user_message = (
-#             "Human-written atomic statements:\n"
-#             + "\n".join(T_atomics)
-#             + "\n\nGenerated atomic statement:\n"
-#             + "\n".join(g_atomic)
-#         )
-#         result = call_gpt4o(system_message, user_message)
-#         print(f"{g_atomic} : {result}")
-#         if result == "True":
-#             TPs.append(g_atomic)
-#         else:
-#             FNs.append(g_atomic)
-
-#     return {"TPs": TPs, "FNs": FNs, "Counts": {"TPs": len(TPs), "FNs": len(FNs)}}
-
+    messages = [system_message] + few_shot_examples + [user_message]
+    return call_gpt4o_assist(messages, AtomicSentences)
 
 def calculate_recall_gpt(T_atomics, g_atomics):
     """
     Call GPT to evaluate semantic recall between human-written (T_atomics)
     and model-generated (g_atomics) atomic statements.
     """
-
-    # system_message = (
-    #     "You are an assistant tasked with determining the semantic equivalence between two sets of atomic sentences. "
-    #     "The first set consists of atomic statements extracted from human-written sentences. "
-    #     "The second set consists of atomic statements extracted from AI-generated sentences. "
-    #     "The goal of this task is to calculate recall metrics. "
-    #     "I will provide you with the definitions of True Positives (TP) and False Negatives (FN). "
-    #     "Provide your response in JSON format."
-    # )
-
-    # user_message = (
-    #     "Definitions:\n"
-    #     "- True Positive (TP): A human-written atomic statement whose meaning is clearly captured by at least one generated atomic statement.\n"
-    #     "- False Negative (FN): A human-written atomic statement that is not captured or reflected in any generated statement.\n\n"
-    #     # "Instructions:\n"
-    #     # "1. For each human-written atomic statement, check whether any of the model-generated statements express the same core meaning.\n"
-    #     # "2. If so, include the human-written statement in the True Positives (TPs).\n"
-    #     # "3. If no generated statement captures the meaning, include the human-written statement in the False Negatives (FNs).\n"
-    #     # "4. Do NOT include any generated statements in the output.\n"
-    #     # "5. Do NOT make assumptions or inferences beyond what is clearly stated.\n\n"
-    #     # # This is linear instruction
-    #     "Instructions:\n"
-    #     "1. For each human-written atomic statement, check whether any of the model-generated statements express the same core meaning.\n"
-    #     "2. If the meaning is directly stated or clearly implied (without requiring external knowledge or creative inference), include the human-written statement in the True Positives (TPs).\n"
-    #     "3. If the meaning is not directly stated or clearly implied, include the human-written statement in the False Negatives (FNs).\n"
-    #     "4. Use common-sense understanding when deciding if the meaning is implied — for example, if a title or visual element is described, it's reasonable to assume the cover is visible.\n"
-    #     "5. Do NOT include any model-generated statements in the output.\n"
-    #     "6. Avoid using outside knowledge or making assumptions beyond what is explicitly or clearly implied in the statements.\n\n"
-    #     "Human-written atomic statements:\n"
-    #     + "\n".join(T_atomics)
-    #     + "\n\nGenerated atomic statements:\n"
-    #     + "\n".join(g_atomics)
-    #     + "\n\n Return a JSON object in the following format:\n"
-    #     "{\n"
-    #     '  "TPs": [list of human-written statements that are matched],\n'
-    #     '  "FNs": [list of human-written statements that are not matched],\n'
-    #     '  "Counts": {"TP": number, "FN": number}\n'
-    #     "}\n\n"
-    #     "Again, ONLY include the human-written statements in TPs and FNs. Do NOT include any generated statements. "
-    #     "Only return the JSON object. Do NOT include any explanations or markdown formatting."
-    # )
 
     system_message = (
         "You are an assistant tasked with determining the semantic equivalence between two sets of atomic sentences. "
@@ -400,36 +551,6 @@ def calculate_precision_gpt(human_captions, g_atomics):
     Call GPT to evaluate the semantic precision between human-written captions and model-generated atomic statements.
     """
 
-    # system_message = (
-    #     "You are an assistant tasked with determining the semantic equivalence between two sets of sentences. "
-    #     "The first set consists of human-written sentences. "
-    #     "The second set consists of atomic statements extracted from AI-generated sentences. "
-    #     "The goal of this task is to calculate precision metrics. "
-    #     "I will provide you with the definitions of True Positives (TP) and False Positive (FP). "
-    #     "Provide your response in JSON format."
-    # )
-
-    # user_message = (
-    #     "Definitions:\n"
-    #     "- True Positive (TP): A generated atomic statement that is semantically supported by, or reasonably implied by, at least one human-written caption. Exact wording is not required.\n"
-    #     "- False Positive (FP): A generated atomic statement that introduces information not present in, or contradictory to, any of the human-written captions.\n\n"
-    #     "Instructions:\n"
-    #     "1. Evaluate each generated atomic statement independently.\n"
-    #     "2. If the core meaning of a generated statement is explicitly stated or reasonably implied by any human-written caption, mark it as a True Positive (TP).\n"
-    #     "3. If the statement includes details that are not found or are contradicted by the captions, mark it as a False Positive (FP).\n"
-    #     "4. Accept paraphrased or partially matching statements as TP if the core meaning aligns.\n"
-    #     "5. Do not make assumptions based on common knowledge, visual conventions, or brand familiarity unless explicitly mentioned in the captions.\n\n"
-    #     "Human-written captions:\n"
-    #     + "\n".join(f"- {caption}" for caption in human_captions)
-    #     + "\n\nGenerated atomic statements:\n"
-    #     + "\n".join(f"- {statement}" for statement in g_atomics)
-    #     + "\n\n Return a JSON object in the following format:\n"
-    #     '- "TPs": a list of true positive generated atomic statements.\n'
-    #     '- "FPs": a list of false positive generated atomic statements.\n'
-    #     '- "Counts": a dictionary with the number of TP and FP statements.\n\n'
-    #     "Only return the JSON object. Do NOT include any explanations or markdown formatting."
-    # )
-
     system_message = (
         "You are an assistant tasked with determining the semantic equivalence between two sets of sentences. "
         "The first set consists of human-written sentences. "
@@ -461,6 +582,97 @@ def calculate_precision_gpt(human_captions, g_atomics):
     )
 
     return call_gpt4o(system_message, user_message, Precision)
+
+# This is only for testing the prompt
+def generate_atomic_statement_part1(org_caption):
+    T_atomics = []
+
+    for item in tqdm(org_caption):
+        # Filter out human captions
+        human_captions = [
+            hc["caption"]
+            for hc in item["human_captions"]
+            if hc["caption"]
+            != "Quality issues are too severe to recognize visual content."
+        ]
+
+        human_atomic_captions = []
+        for hc in human_captions:
+            human_atomic_captions.append(parse_atomic_statements(hc))
+
+        # print(json.dumps(human_atomic_captions, indent=4, ensure_ascii=False))
+        total_sentence = [
+            s for output in human_atomic_captions for s in output["atomic_captions"]
+        ]
+
+        T_atomics.append(total_sentence)
+
+    return T_atomics
+
+# This is only for testing the prompt
+def generate_atomic_statement_part_reduce(atomic_captions):
+    T_atomics = [] 
+    for item in tqdm(atomic_captions): 
+        parsed_statements = item["evaluation"]["previous_cap_f1"]["parsed_atomics"]
+        # print(json.dumps(parsed_statements, indent=4))
+
+        human_result = remove_duplicate_atomic_statements(parsed_statements)
+        T_atomics.append(human_result)
+
+    return T_atomics
+
+# This is only for testing the prompt
+def generate_atomic_statement_reduce_fewshot(atomic_captions):
+    T_atomics = [] 
+    for item in tqdm(atomic_captions): 
+        parsed_statements = item["evaluation"]["previous_cap_f1"]["parsed_atomics"]
+        # print(json.dumps(parsed_statements, indent=4))
+
+        human_result = remove_duplicate_atomic_statements_fewshot(parsed_statements)
+        T_atomics.append(human_result)
+
+    return T_atomics
+
+# This is only for testing the prompt
+def generate_atomic_statement_partG(atomic_captions):
+    g_atomics = []
+
+    for item in tqdm(atomic_captions):
+        # Model captions
+        model_results = []
+        for mc in item["model_captions"]:
+            model_name = mc["model_name"]
+            model_caption = mc["caption"]
+            atomic_result = parse_atomic_statements(model_caption)
+
+            model_results.append(
+                {
+                    "model_name": model_name,
+                    "atomic_captions": atomic_result["atomic_captions"],
+                }
+            )
+
+        g_atomics.append(model_results)
+
+    return g_atomics
+
+def generate_atomic_statement_getG(atomic_captions):
+    g_atomics_list = []
+
+    for item in tqdm(atomic_captions): 
+        model_to_atomics = item["evaluation"]["previous_cap_f1"].get("g_atomics", {})
+        
+        parsed_statements = []
+        for model_name, atomics in model_to_atomics.items():
+            parsed_statements.append({
+                "model_name": model_name,
+                "atomic_captions": atomics  # 바로 리스트로 넣어줌
+            })
+
+        g_atomics_list.append(parsed_statements)
+
+    return g_atomics_list
+
 
 
 def generate_atomic_statement(org_caption, limit=2):
@@ -495,7 +707,7 @@ def generate_atomic_statement(org_caption, limit=2):
         total_sentence = [
             s for output in human_atomic_captions for s in output["atomic_captions"]
         ]
-        human_result = remove_duplicate_atomic_statements(total_sentence)
+        human_result = remove_duplicate_atomic_statements_fewshot(total_sentence)
 
         # Model captions
         model_results = []
