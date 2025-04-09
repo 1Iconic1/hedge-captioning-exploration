@@ -7,6 +7,12 @@ python combine_captioned_data.py \
     --molmo ../../data/study-2-output/labeled-data/molmo-caption-output/Molmo-7B-O-0924_caption-output_7304-images_start-0_end-7304_2025-03-28_22:45:36.json \
     --gpt ../../data/study-2-output/labeled-data/gpt4o-caption-output/gpt-4o-2024-08-06_caption-output_7304-images_start-0_end-7304_2025-03-29_13:29:15.json \
     --output ../../data/study-2-output/labeled-data/combined-caption-output/
+
+python combine_captioned_data.py \
+    --llama ../../data/study-2-output/labeled-data/high-quality-images/llama-caption-output/Llama-3.2-11B-Vision-Instruct_caption-output_5428-images_start-0_end-5428_2025-04-08_18:31_fixed.json \
+    --molmo ../../data/study-2-output/labeled-data/high-quality-images/molmo-caption-output/Molmo-7B-O-0924_caption-output_5428-images_start-0_end-5428_2025-04-08_17:42_fixed.json \
+    --gpt ../../data/study-2-output/labeled-data/high-quality-images/gpt4o-caption-output/gpt-4o-2024-08-06_caption-output_5428-images_start-0_end-5428_2025-04-09_00:15_fixed.json \
+    --output ../../data/study-2-output/labeled-data/combined-caption-output/
 """
 
 import argparse
@@ -57,6 +63,10 @@ def combine_captioned_data(gpt_data, llama_data, molmo_data):
         if output[i]["image_id"] == molmo_data[i]["image_id"]:
             output[i]["model_captions"].append(molmo_data[i]["model_captions"][0])
 
+    # remove things we don't need
+    for item in output:
+        if "id" in item:
+            del item["id"]
     return output
 
 
