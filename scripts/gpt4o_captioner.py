@@ -6,15 +6,17 @@ python gpt4o_captioner.py \
     --output-dir "../data/study-2-output/labeled-data/high-quality-images/gpt4o-caption-output" \
     --scratch-path "../data/scratch/study-2/gpt4o-caption-output" \
     --start 0 \
-    --end 10
+    --end 12
 """
 
 # Libraries
 import argparse
 import json
+import math
 import pandas as pd
 import os
 import copy
+from multiprocessing import Pool
 from datetime import datetime
 
 from openai import OpenAI
@@ -77,14 +79,41 @@ def generate_caption(image_url, openai_client, prompt, temperature=1.0):
         return ""
 
 
-def generate_caption_output(
-    image_captioning_input, openai_client, scratch_path, start_index
-):
+def generate_caption_parallel(dataset, scratch_path, num_workers=4):
+    """
+    Generates captions for a dataset in parallel.
+    TODO: this ran into an issue with the API and did not complete. Needs error handling.
+
+    Inputs:
+    - dataset (pd.DataFrame): dataframe containing image annotations and image quality.
+    - openai_client (openai.OpenAI): openai client.
+    """
+    # get how much data we have
+    total = len(dataset)
+    chunk_size = math.ceil(total / num_workers)
+
+    with Pool(num_workers) as pool:
+        results = pool.map(
+            generate_caption_output,
+            [
+                (
+                    dataset[i * chunk_size : min((i + 1) * chunk_size, total)],
+                    scratch_path,
+                    i * chunk_size,
+                )
+                for i in range(num_workers)
+            ],
+        )
+
+    return results
+
+
+def generate_caption_output(args):
     """
     Generates a caption for an image.
 
     Inputs:
-    - image_captioning_input (pd.DataFrame): dataframe containing image annotations and image quality.
+    - image_captioning_input (dict): dictionary containing image annotations and image quality.
     - openai_client (openai.OpenAI): openai client.
     - scratch_path (str): path to scratch folder where intermediate files will be stored.
     - start_index (int): start index of the dataset to caption.
@@ -92,6 +121,9 @@ def generate_caption_output(
     Output:
     - (list): list of dictionaries containing image annotations and image quality.
     """
+    # unpack arguments
+    image_captioning_input, scratch_path, start_index = args
+
     # deepclone input where labels will be
     caption_output = copy.deepcopy(image_captioning_input)
 
@@ -100,6 +132,14 @@ def generate_caption_output(
 
     # create scratch path if it doesn't exist
     os.makedirs(scratch_path, exist_ok=True)
+
+    # if start index is not None, only caption the images from the start index to the end index
+    if start_index is None:
+        start_index = 0
+
+    # initialize openai client
+    openai_client = OpenAI()
+    openai_client.api_key = os.getenv("OPENAI_API_KEY")
 
     for index, _ in enumerate(tqdm(image_captioning_input)):
         # get image for current annotation
@@ -118,7 +158,7 @@ def generate_caption_output(
             with open(
                 os.path.join(
                     scratch_path,
-                    f"{model_name}_caption-output_start-{start_index}_end-{start_index + index}.json",
+                    f"{model_name}_caption-output_start-{start_index}_end-{start_index + index}_{datetime.now().strftime('%Y-%m-%d')}.json",
                 ),
                 "w",
             ) as f:
@@ -190,10 +230,6 @@ def main():
     start_index = args.start
     end_index = args.end if args.end is not None else len(dataset_to_caption)
 
-    # initialize openai client
-    openai_client = OpenAI()
-    openai_client.api_key = os.getenv("OPENAI_API_KEY")
-
     # generate caption output
     print(f"Generating caption output for {start_index} to {end_index} images...")
     print(f"Prompt: \n {get_prompt()}")
@@ -203,11 +239,18 @@ def main():
         else "../data/scratch/study-2/gpt4o-caption-output"
     )
     caption_output = generate_caption_output(
-        dataset_to_caption[start_index:end_index],
-        openai_client,
-        scratch_path,
-        start_index,
+        (dataset_to_caption[start_index:end_index], scratch_path, start_index),
     )
+
+    # TODO: fix the parallelization
+    # caption_output = generate_caption_parallel(
+    #     dataset_to_caption[start_index:end_index],
+    #     scratch_path,
+    #     num_workers=12,
+    # )
+
+    # sort caption output by image id
+    caption_output = sorted(caption_output, key=lambda x: x["image_id"])
 
     # generate output path
     if args.output_dir is not None:
