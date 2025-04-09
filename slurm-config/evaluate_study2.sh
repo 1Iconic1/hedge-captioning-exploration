@@ -17,8 +17,16 @@ source /home/kapilg/.local/share/virtualenvs/local-blurred-captioning-exploratio
 cd /home/kapilg/projects/local-blurred-captioning-exploration/scripts/evaluation
 
 # run code
+## full combined data
+# python evaluate_captions.py \
+#     --input ../../data/study-2-output/labeled-data/combined-caption-output/combined-caption-output_7304-images_2025-03-29_21:40:00.json \
+#     --image-folder ../../data/caption-dataset/train \
+#     --output-dir ../../data/study-2-output/labeled-data/evaluation-results
+
+## single model
 python evaluate_captions.py \
-    --input ../../data/study-2-output/labeled-data/combined-caption-output/combined-caption-output_7304-images_2025-03-29_21:40:00.json \
+    --input ../../data/study-2-output/labeled-data/high-quality-images/molmo-caption-output/Molmo-7B-O-0924_caption-output_5428-images_start-0_end-5428_2025-04-08_17:42.json \
+    --image-folder ../../data/caption-dataset/train \
     --output-dir ../../data/study-2-output/labeled-data/evaluation-results
 
 # deactivate environment
