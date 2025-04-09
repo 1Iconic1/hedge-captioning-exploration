@@ -2,8 +2,18 @@
 Runs all evaluation metrics on the captions and outputs a json file with the results.
 
 Usage:
+Example with no evaluations:
 python evaluate_captions.py \
     --input ../../data/study-2-output/labeled-data/combined-caption-output/combined-caption-output_7304-images_2025-03-29_21:40:00.json \
+    --image-folder ../../data/caption-dataset/train \
+    --output-dir ../../data/study-2-output/labeled-data/evaluation-results \
+    --start 0 \
+    --end 1
+
+Example with some evaluations computed:
+python evaluate_captions.py \
+    --input ../../data/study-2-output/labeled-data/evaluation-results/evaluation_results_5432-images_2025-04-03_11:27_fixed.json \
+    --image-folder ../../data/caption-dataset/train \
     --output-dir ../../data/study-2-output/labeled-data/evaluation-results \
     --start 0 \
     --end 1
@@ -12,12 +22,13 @@ python evaluate_captions.py \
 import argparse
 import os
 import json
+import copy
 from datetime import datetime
+import time
 
 import evaluate
 import torch
 from bert_score import score
-from tqdm import tqdm
 
 # setup pytorch for BERTScore
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # for multi-GPU systems, force single GPU
@@ -45,95 +56,200 @@ def load_data(input_file):
     return data
 
 
-def filter_data(data):
+def sort_data(data):
     """
-    Remove data where Text = False
+    Sort the data by image_id.
 
     Args:
         data (list of dict): list of dictionaries containing captioning data
 
     Returns:
-        list of dict: list of dictionaries containing captioning data
+        list of dict: list of dictionaries containing captioning data sorted by image_id
     """
-    return [d for d in data if d["text_detected"]]
+    return sorted(data, key=lambda x: x["image_id"])
 
 
-def evaluate_captions(data, model_type="microsoft/deberta-xlarge-mnli", lang="en"):
+def construct_evaluation_input(dataset, image_folder):
     """
-    Evaluate the captions using all metrics. Update data by reference.
+    Constructs an array of references, candidate caption, and image file (for CLIP).
+    Used for batch evaluation of each metric.
 
     Args:
-        data (list of dict): list of dictionaries containing captioning data
-        model_type (str): type of model to use for BERTScore evaluation
-        lang (str): language of the captions for BERTScore evaluation
+        dataset (list of dict): list of dictionaries containing captioning data. Each dictionary must contain
+            - "human_captions" (list of dict): list of dictionaries containing human captions
+            - "model_captions" (list of dict): list of dictionaries containing model captions
+            - "image_file" (str): path to the image file
 
     Returns:
-        None
+        (dict of list): candidate captions for each model. model name is the key.
+            len(candidates[model]) == len(dataset)
+        (list): references for each image. each element is a list of strings.
+            len(references) == len(dataset)
+        (list): image files for each image. each element is a string.
+            len(image_files) == len(dataset)
     """
-    # initialize the metrics
-    bleu = evaluate.load("bleu")
-    meteor = evaluate.load("meteor")
-    rouge = evaluate.load("rouge")
-
-    for image in tqdm(data):
+    candidates = {}
+    references = []
+    image_files = []
+    for image in dataset:
+        # collect references for the current image
         curr_references = [
             caption["caption"]
             for caption in image["human_captions"]
             if caption["caption"]
             != "Quality issues are too severe to recognize visual content."
         ]
-        curr_output = {}
+        references.append(curr_references)
+
+        # get captions for each model for the current image
         for model in image["model_captions"]:
             curr_model_name = model["model_name"]
-            curr_output[curr_model_name] = {}
-            curr_candidate = [model["caption"]]
 
-            # compute BERTScore
-            P, R, F1 = score(
-                curr_candidate,
-                [curr_references],
-                model_type=model_type,
-                lang=lang,
-                device=device_type,
+            # compute scores for current model
+            curr_candidate = model["caption"]
+            if curr_model_name not in candidates:
+                candidates[curr_model_name] = [curr_candidate]
+            else:
+                candidates[curr_model_name].append(curr_candidate)
+
+        # construct list of files for Clip
+        # check if the image file exists
+        image_file_name = image["file_name"]
+        if os.path.exists(os.path.join(image_folder, image_file_name)):
+            image_files.append(os.path.join(image_folder, image_file_name))
+        else:
+            print(f"Image file {image_file_name} does not exist.")
+            image_files.append("")
+
+    return candidates, references, image_files
+
+
+def execute_bleu(candidates, references, order):
+    """
+    Execute BLEU evaluation.
+
+    Args:
+        candidates (list of str): list of candidate captions
+        references (list of list of str): list of references for each candidate caption.
+            len(references) == len(candidates)
+        order (int): order of BLEU to compute
+
+    Returns:
+        list of dict: list of dictionaries containing BLEU scores for each image.
+    """
+    output = []
+    bleu = evaluate.load("bleu")
+    for index in range(len(candidates)):
+        candidate = candidates[index]
+        reference = references[index]
+        output.append(
+            bleu.compute(
+                predictions=[candidate],
+                references=[reference],
+                max_order=order,
             )
-            curr_output[curr_model_name]["bertscore"] = {
-                "scores": {
-                    "precision": float(P[0]),
-                    "recall": float(R[0]),
-                    "f1": float(F1[0]),
-                }
+        )
+    return output
+
+
+def execute_meteor(candidates, references):
+    """
+    Execute METEOR evaluation.
+
+    Args:
+        candidates (list of str): list of candidate captions
+        references (list of list of str): list of references for each candidate caption.
+            len(references) == len(candidates)
+        order (int): order of METEOR to compute
+
+    Returns:
+        list of dict: list of dictionaries containing METEOR scores for each image.
+    """
+    output = []
+    meteor = evaluate.load("meteor")
+    for index in range(len(candidates)):
+        candidate = candidates[index]
+        reference = references[index]
+        output.append(
+            meteor.compute(
+                predictions=[candidate],
+                references=[reference],
+            )
+        )
+    return output
+
+
+def execute_rouge(candidates, references):
+    """
+    Execute ROUGE evaluation.
+
+    Args:
+        candidates (list of str): list of candidate captions
+        references (list of list of str): list of references for each candidate caption.
+            len(references) == len(candidates)
+        order (int): order of ROGUE to compute
+
+    Returns:
+        list of dict: list of dictionaries containing ROUGE scores for each image.
+    """
+    output = []
+    rouge = evaluate.load("rouge")
+    for index in range(len(candidates)):
+        candidate = candidates[index]
+        reference = references[index]
+        output.append(
+            rouge.compute(
+                predictions=[candidate],
+                references=[reference],
+            )
+        )
+    return output
+
+
+def execute_bertscore(
+    candidates,
+    references,
+    model_type="microsoft/deberta-xlarge-mnli",
+    lang="en",
+    rescale_with_baseline=False,
+):
+    """
+    Execute BERTScore evaluation.
+
+    Args:
+        candidates (list of str): list of candidate captions
+        references (list of list of str): list of references for each candidate caption.
+            len(references) == len(candidates)
+        model_type (str): type of model to use for BERTScore evaluation
+        lang (str): language of the captions for BERTScore evaluation
+        rescale_with_baseline (bool): whether to rescale the scores with a baseline
+
+    Returns:
+        list of dict: list of dictionaries containing BERTScore (precision, recall, F1) for each image.
+    """
+    P_lst, R_lst, F1_lst = score(
+        candidates,
+        references,
+        model_type=model_type,
+        lang=lang,
+        rescale_with_baseline=rescale_with_baseline,
+    )
+    output = []
+    for index in range(len(candidates)):
+        output.append(
+            {
+                "precision": float(P_lst[index]),
+                "recall": float(R_lst[index]),
+                "f1": float(F1_lst[index]),
             }
-
-            # compute BLEU
-            for order in range(1, 5):
-                bleu_score = bleu.compute(
-                    predictions=curr_candidate,
-                    references=[curr_references],
-                    max_order=order,
-                )
-                curr_output[curr_model_name][f"bleu-{order}"] = bleu_score
-
-            # compute METEOR
-            meteor_score = meteor.compute(
-                predictions=curr_candidate, references=[curr_references]
-            )
-            curr_output[curr_model_name]["meteor"] = meteor_score
-
-            # compute ROUGE
-            rouge_score = rouge.compute(
-                predictions=curr_candidate, references=[curr_references]
-            )
-            curr_output[curr_model_name]["rouge"] = rouge_score
-
-        # check if evaluation exists and save score
-        if "evaluation" not in image:
-            image["evaluation"] = {}
-        image["evaluation"] = curr_output
+        )
+    return output
 
 
-def main():
+def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, help="Input JSON file path.")
+    parser.add_argument("--image-folder", type=str, help="Image folder path.")
     parser.add_argument(
         "--output-dir", type=str, help="Output directory for JSON file."
     )
@@ -141,21 +257,116 @@ def main():
         "--start", type=int, help="Start index of the data to evaluate."
     )
     parser.add_argument("--end", type=int, help="End index of the data to evaluate.")
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    # get the arguments
+    args = parse_args()
 
     # load the data from the files
     data = load_data(args.input)
-    data = filter_data(data)
+
+    # sort the data by image_id since order matters for matching metrics up
+    data = sort_data(data)
+
+    # get the subset of data to evaluate
     start_idx = args.start if args.start else 0
     end_idx = args.end if args.end else len(data)
     data = data[start_idx:end_idx]
 
-    # evaluate the captions
-    print(
-        f"Evaluating data from {start_idx} to {end_idx} (total images: {len(data)})..."
+    # construct the evaluation input
+    candidates, references, image_files = construct_evaluation_input(
+        data, args.image_folder
     )
-    evaluate_captions(data)
 
+    # evaluate the captions
+    print(f"Evaluating data from {start_idx} to {end_idx} (total images: {len(data)}).")
+    """
+    By the end of this loop, we want an array of dictionaries with an evalutation object.
+    This should be the same length as the data object.
+    Each object in this list gets attached to the original data object in evalutation: {...}
+    [
+        {
+            "metric": {
+                "model": {
+                    "scores": {...}
+                },
+                "model": {
+                    "scores": {...}
+                },
+                ...
+            }
+        },
+        ...
+    ]
+    """
+
+    # loop over metrics
+    all_image_evals = []
+    for metric in [
+        "bleu-1",
+        "bleu-2",
+        "bleu-3",
+        "bleu-4",
+        "meteor",
+        "rouge",
+        "bertscore",
+    ]:
+        start_time = time.time()
+        print(f"Evaluating {metric}...")
+        current_eval = []
+        # loop over models
+        for model in candidates.keys():
+            # finally, compute the scores for the current model and metric
+            print(f"---for {model}...", end="", flush=True)
+            if metric == "bleu-1":
+                order = 1
+                scores = execute_bleu(candidates[model], references, order)
+            elif metric == "bleu-2":
+                order = 2
+                scores = execute_bleu(candidates[model], references, order)
+            elif metric == "bleu-3":
+                order = 3
+                scores = execute_bleu(candidates[model], references, order)
+            elif metric == "bleu-4":
+                order = 4
+                scores = execute_bleu(candidates[model], references, order)
+            elif metric == "meteor":
+                scores = execute_meteor(candidates[model], references)
+            elif metric == "rouge":
+                scores = execute_rouge(candidates[model], references)
+            elif metric == "bertscore":
+                scores = execute_bertscore(candidates[model], references)
+
+            # add to merged_evals
+            if len(current_eval) == 0:
+                for index, score in enumerate(scores):
+                    current_eval.append({metric: {model: score}})
+            else:
+                for index, score in enumerate(scores):
+                    current_eval[index][metric][model] = score
+
+            print(f"complete")
+
+        # merge results with all_image_evals
+        if len(all_image_evals) == 0:
+            all_image_evals = copy.deepcopy(current_eval)
+        else:
+            # merge the current eval dictionary with the all_image_evals dictionary
+            for index, eval in enumerate(current_eval):
+                all_image_evals[index] = {**all_image_evals[index], **eval}
+
+        print(f"{metric} complete. Took {time.time() - start_time} seconds.\n")
+
+    # attach all_image_evals to the data object
+    for index, image in enumerate(data):
+        # check if evaluation exists and save score
+        if "evaluation" not in image:
+            image["evaluation"] = {}
+        image["evaluation"] = copy.deepcopy(all_image_evals[index])
+
+    # export results
     # check if output directory exists
     os.makedirs(args.output_dir, exist_ok=True)
 
