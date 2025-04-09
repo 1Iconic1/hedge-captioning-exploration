@@ -24,23 +24,28 @@ class RecallCounts(BaseModel):
     TP: int
     FN: int
 
+class RecallMatchPair(BaseModel):
+    T_atomic: str
+    g_atomic: str
 
 class Recall(BaseModel):
     TPs: list[str]
     FNs: list[str]
-    Match: list[str]
+    Match: list[RecallMatchPair]
     Counts: RecallCounts
 
+class PrecisionMatchPair(BaseModel):
+    g_atomic: str
+    T_org: str
 
 class PrecisionCounts(BaseModel):
     TP: int
     FP: int
 
-
 class Precision(BaseModel):
     TPs: list[str]
     FPs: list[str]
-    Match: list[str]
+    Match: list[PrecisionMatchPair]
     Counts: PrecisionCounts
 
 
@@ -147,6 +152,7 @@ def save_results_json(
     - org_dataset: list of dicts from original json
     - T_atomics: list of string results (optional)
     - g_atomics: list of string results (optional)
+    - parsd_T: list of string results (optional)
     - metadata: list of dicts with TPs, FPs, FNs, Counts (optional)
     - evaluations: list of dicts with recall, precision, cap_f1 or other metrics (optional)
     - metric_name: the evaluation metric name (e.g., "cap_f1", "BLEU", "METEOR", "ROUGE")
@@ -196,11 +202,13 @@ def save_results_json(
                     "recall": {
                         "TPs": model_eval.get("recall", {}).get("TPs", []),
                         "FNs": model_eval.get("recall", {}).get("FNs", []),
+                        "Match": model_eval.get("recall", {}).get("Match", []),
                         "Counts": model_eval.get("recall", {}).get("Counts", {}),
                     },
                     "precision": {
                         "TPs": model_eval.get("precision", {}).get("TPs", []),
                         "FPs": model_eval.get("precision", {}).get("FPs", []),
+                        "Match": model_eval.get("precision", {}).get("Match", []),
                         "Counts": model_eval.get("precision", {}).get("Counts", {}),
                     },
                 }
@@ -533,13 +541,19 @@ def calculate_recall_gpt(T_atomics, g_atomics):
         + "\n".join(T_atomics)
         + "\n\nGenerated atomic statements:\n"
         + "\n".join(g_atomics)
-        + "\n\n Return a JSON object in the following format:\n"
+        + "\n\nReturn a JSON object in the following format:\n"
         "{\n"
         '  "TPs": [list of human-written statements that are matched],\n'
         '  "FNs": [list of human-written statements that are not matched],\n'
+        '  "Match": [\n'
+        '    {"T_atomic": "<human-written statement>", "g_atomic": "<matched generated statement>"},\n'
+        '    ...\n'
+        '  ],\n'
         '  "Counts": {"TP": number, "FN": number}\n'
         "}\n\n"
-        "Again, ONLY include the human-written statements in TPs and FNs. Do NOT include any generated statements. "
+        "Again, ONLY include the human-written statements in TPs and FNs. Do NOT include any generated statements directly in those lists. "
+        "Use the 'Match' field to show which human-written statements matched which generated ones. "
+        "Every sentence in the `TPs` list must exactly match one of the `T_atomic` values in the `Match` field."
         "Only return the JSON object. Do NOT include any explanations or markdown formatting."
     )
 
@@ -577,11 +591,18 @@ def calculate_precision_gpt(human_captions, g_atomics):
         + "\n\n Return a JSON object in the following format:\n"
         '- "TPs": a list of true positive generated atomic statements. Each item must be copied exactly from the list above.\n'
         '- "FPs": a list of false positive generated atomic statements. Each item must be copied exactly from the list above.\n'
+        '- "Match": [\n'
+        '    {"g_atomic": "<exact generated atomic statement>", "T_org": "<matching human-written caption>"},\n'
+        '    ...\n'
+        '  ],\n' 
         '- "Counts": a dictionary with the number of TP and FP statements.\n\n'
         "Only return the JSON object. Do NOT include any explanations or markdown formatting."
+        "Use the 'Match' field to show the most relevant generated atomic caption that justifies each TP.\n"
+        "Every sentence in the `TPs` list must exactly match one of the `g_atomic` values in the `Match` field."
     )
 
     return call_gpt4o(system_message, user_message, Precision)
+
 
 # This is only for testing the prompt
 def generate_atomic_statement_part1(org_caption):
@@ -689,6 +710,7 @@ def generate_atomic_statement(org_caption, limit=2):
     """
     T_atomics = []
     g_atomics = []
+    parsed_T = []
 
     for item in tqdm(org_caption[:limit]):
         # Filter out human captions
@@ -708,6 +730,7 @@ def generate_atomic_statement(org_caption, limit=2):
             s for output in human_atomic_captions for s in output["atomic_captions"]
         ]
         human_result = remove_duplicate_atomic_statements_fewshot(total_sentence)
+        parsed_T.append(total_sentence)
 
         # Model captions
         model_results = []
@@ -718,7 +741,7 @@ def generate_atomic_statement(org_caption, limit=2):
 
             model_results.append(
                 {
-                    "model_name": model_name,
+                    "model_name": model_name, 
                     "atomic_captions": atomic_result["atomic_captions"],
                 }
             )
@@ -726,7 +749,7 @@ def generate_atomic_statement(org_caption, limit=2):
         T_atomics.append(human_result)
         g_atomics.append(model_results)
 
-    return T_atomics, g_atomics
+    return T_atomics, g_atomics, parsed_T
 
 def evaluate_single_instance(model_name, T_atomics, T_original, g_captions, print_mode=False):
     if print_mode:
