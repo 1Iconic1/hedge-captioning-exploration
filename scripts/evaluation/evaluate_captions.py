@@ -488,7 +488,7 @@ def main():
         "meteor",
         "rouge",
         "cider",
-        # "spice",
+        "spice",
         "bertscore",
         "clipscore",
         "clipscore_ref",
@@ -527,8 +527,6 @@ def main():
                     scores = [{"score": x} for x in scores]
                 elif metric == "spice":
                     average, scores = execute_spice(candidates[model], references)
-                    print(f"SPICE: {average}")
-                    print(f"SPICE scores: {scores}")
                 elif metric == "clipscore":
                     scores = execute_clipscore(candidates[model], image_files)
                 elif metric == "clipscore_ref":
