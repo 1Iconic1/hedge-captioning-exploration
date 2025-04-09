@@ -8,7 +8,7 @@ python evaluate_captions.py \
     --image-folder ../../data/caption-dataset/train \
     --output-dir ../../data/study-2-output/labeled-data/evaluation-results \
     --start 0 \
-    --end 1
+    --end 10
 
 Example with some evaluations computed:
 python evaluate_captions.py \
@@ -16,7 +16,7 @@ python evaluate_captions.py \
     --image-folder ../../data/caption-dataset/train \
     --output-dir ../../data/study-2-output/labeled-data/evaluation-results \
     --start 0 \
-    --end 1
+    --end 10
 """
 
 import argparse
@@ -260,6 +260,42 @@ def parse_args():
     return parser.parse_args()
 
 
+def check_if_evaluated(data, key):
+    """
+    Check if the data has already been evaluated one a measure. Key corresponds to an evaluation metric. For each image:
+    {
+        ...
+        key: {
+            "model": {
+                "scores": {...}
+            },
+            ...
+        }
+        ...
+    }
+
+    Args:
+        data (list of dict): list of dictionaries containing captioning data
+        key (str): key of the evaluation metric
+
+    Returns:
+        (list of evaluation dicts or None): list of dictionaries containing evaluation data, if present for all images in data or None if not
+    """
+    output = []
+
+    for image in data:
+        if "evaluation" not in image:
+            return None
+        if key in image["evaluation"]:
+            output.append(image["evaluation"][key])
+        else:
+            return None
+
+    # at this point, we're only returning a list of evaluation dicts
+    # if all have an evaluation for the given key
+    return output
+
+
 def main():
     # get the arguments
     args = parse_args()
@@ -316,38 +352,45 @@ def main():
         start_time = time.time()
         print(f"Evaluating {metric}...")
         current_eval = []
-        # loop over models
-        for model in candidates.keys():
-            # finally, compute the scores for the current model and metric
-            print(f"---for {model}...", end="", flush=True)
-            if metric == "bleu-1":
-                order = 1
-                scores = execute_bleu(candidates[model], references, order)
-            elif metric == "bleu-2":
-                order = 2
-                scores = execute_bleu(candidates[model], references, order)
-            elif metric == "bleu-3":
-                order = 3
-                scores = execute_bleu(candidates[model], references, order)
-            elif metric == "bleu-4":
-                order = 4
-                scores = execute_bleu(candidates[model], references, order)
-            elif metric == "meteor":
-                scores = execute_meteor(candidates[model], references)
-            elif metric == "rouge":
-                scores = execute_rouge(candidates[model], references)
-            elif metric == "bertscore":
-                scores = execute_bertscore(candidates[model], references)
 
-            # add to merged_evals
-            if len(current_eval) == 0:
-                for index, score in enumerate(scores):
-                    current_eval.append({metric: {model: score}})
-            else:
-                for index, score in enumerate(scores):
-                    current_eval[index][metric][model] = score
+        # check if the data has already been evaluated
+        already_evaluated = check_if_evaluated(data, metric)
+        if already_evaluated is None:
+            # loop over models
+            for model in candidates.keys():
+                # finally, compute the scores for the current model and metric
+                print(f"---for {model}...", end="", flush=True)
+                if metric == "bleu-1":
+                    order = 1
+                    scores = execute_bleu(candidates[model], references, order)
+                elif metric == "bleu-2":
+                    order = 2
+                    scores = execute_bleu(candidates[model], references, order)
+                elif metric == "bleu-3":
+                    order = 3
+                    scores = execute_bleu(candidates[model], references, order)
+                elif metric == "bleu-4":
+                    order = 4
+                    scores = execute_bleu(candidates[model], references, order)
+                elif metric == "meteor":
+                    scores = execute_meteor(candidates[model], references)
+                elif metric == "rouge":
+                    scores = execute_rouge(candidates[model], references)
+                elif metric == "bertscore":
+                    scores = execute_bertscore(candidates[model], references)
 
-            print(f"complete")
+                # add to merged_evals
+                if len(current_eval) == 0:
+                    for index, score in enumerate(scores):
+                        current_eval.append({metric: {model: score}})
+                else:
+                    for index, score in enumerate(scores):
+                        current_eval[index][metric][model] = score
+
+                print(f"complete.")
+        else:
+            print(f"Data already evaluated for {metric}. Skipping.")
+            current_eval = [{metric: x} for x in already_evaluated]
 
         # merge results with all_image_evals
         if len(all_image_evals) == 0:
@@ -357,7 +400,7 @@ def main():
             for index, eval in enumerate(current_eval):
                 all_image_evals[index] = {**all_image_evals[index], **eval}
 
-        print(f"{metric} complete. Took {time.time() - start_time} seconds.\n")
+        print(f"{metric} complete. Took {time.time() - start_time:.4f} seconds.\n")
 
     # attach all_image_evals to the data object
     for index, image in enumerate(data):
