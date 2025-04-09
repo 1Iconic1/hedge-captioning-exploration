@@ -546,7 +546,7 @@ def main():
 
                 print(f"complete.")
         else:
-            print(f"Data already evaluated for {metric}. Skipping.")
+            print(f"Captions already evaluated using {metric}. Skipping.")
             current_eval = [{metric: x} for x in already_evaluated]
 
         # merge results with all_image_evals
