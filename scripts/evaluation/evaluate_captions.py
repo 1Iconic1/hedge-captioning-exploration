@@ -29,8 +29,15 @@ import time
 import evaluate
 import torch
 from bert_score import score
+from pycocoevalcap.tokenizer.ptbtokenizer import PTBTokenizer
+from pycocoevalcap.spice.spice import Spice
+from pycocoevalcap.cider.cider import Cider
 
-# setup pytorch for BERTScore
+import clip
+import numpy as np
+from clipscore import get_clip_score, get_refonlyclipscore, extract_all_images
+
+# setup pytorch for BERTScore and CLIP
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # for multi-GPU systems, force single GPU
 if torch.cuda.is_available():
     device_type = "cuda:0"  # force single, first GPU
@@ -246,6 +253,139 @@ def execute_bertscore(
     return output
 
 
+def tokenize(refs, cands, no_op=False):
+    """
+    Used for CIDEr and SPICE evaluation. From: https://github.com/jmhessel/clipscore/blob/main/generation_eval_utils.py.
+
+    Args:
+        refs (_type_): _description_
+        cands (_type_): _description_
+        no_op (bool, optional): _description_. Defaults to False.
+
+    Returns:
+        _type_: _description_
+    """
+    # no_op is a debug option to see how significantly not using the PTB tokenizer
+    # affects things
+    tokenizer = PTBTokenizer()
+
+    if no_op:
+        refs = {idx: [r for r in c_refs] for idx, c_refs in enumerate(refs)}
+        cands = {idx: [c] for idx, c in enumerate(cands)}
+
+    else:
+        refs = {
+            idx: [{"caption": r} for r in c_refs] for idx, c_refs in enumerate(refs)
+        }
+        cands = {idx: [{"caption": c}] for idx, c in enumerate(cands)}
+
+        refs = tokenizer.tokenize(refs)
+        cands = tokenizer.tokenize(cands)
+
+    return refs, cands
+
+
+def execute_cider(candidates, references):
+    """
+    Execute CIDEr evaluation.
+
+    Args:
+        candidates (list of str): list of candidate captions
+        references (list of list of str): list of references for each candidate caption.
+            len(references) == len(candidates)
+
+    Returns:
+        tuple: average CIDEr score and scores for each image.
+    """
+    scorer = Cider()
+    refs, cands = tokenize(references, candidates)
+    average_score, scores = scorer.compute_score(refs, cands)
+    return average_score, scores
+
+
+def execute_spice(candidates, references):
+    """
+    Execute SPICE evaluation.
+
+    Args:
+        candidates (list of str): list of candidate captions
+        references (list of list of str): list of references for each candidate caption.
+            len(references) == len(candidates)
+
+    Returns:
+        tuple: average SPICE score and scores for each image.
+    """
+    scorer = Spice()
+    refs, cands = tokenize(references, candidates)
+    average_score, scores = scorer.compute_score(refs, cands)
+    return average_score, scores
+
+
+def execute_clipscore(candidates, image_files):
+    """
+    Execute CLIPScore evaluation.
+
+    Args:
+        candidates (list of str): list of candidate captions
+        image_files (list of str): list of image files
+
+    Returns:
+        list of dict: list of dictionaries containing CLIPScore scores for each image.
+    """
+    model, transform = clip.load("ViT-B/32", device=device_type, jit=False)
+    model.eval()
+    image_feats = extract_all_images(
+        image_files, model, device_type, batch_size=64, num_workers=1
+    )
+
+    # get image-text clipscore
+    _, per_instance_image_text, candidate_feats = get_clip_score(
+        model, image_feats, candidates, device_type
+    )
+
+    return [{"score": float(x)} for x in per_instance_image_text]
+
+
+def execute_clipscore_ref(candidates, references, image_files):
+    """
+    Execute CLIPScore with References evaluation.
+
+    Args:
+        candidates (list of str): list of candidate captions
+        references (list of list of str): list of references for each candidate caption.
+            len(references) == len(candidates)
+        image_files (list of str): list of image files
+
+    Returns:
+        list of dict: list of dictionaries containing CLIPScore with References scores for each image.
+    """
+    model, transform = clip.load("ViT-B/32", device=device_type, jit=False)
+    model.eval()
+    image_feats = extract_all_images(
+        image_files, model, device_type, batch_size=64, num_workers=1
+    )
+
+    # get image-text clipscore
+    _, per_instance_image_text, candidate_feats = get_clip_score(
+        model, image_feats, candidates, device_type
+    )
+
+    # get text-text clipscore
+    _, per_instance_text_text = get_refonlyclipscore(
+        model, references, candidate_feats, device_type
+    )
+
+    # F-score
+    refclipscores = (
+        2
+        * per_instance_image_text
+        * per_instance_text_text
+        / (per_instance_image_text + per_instance_text_text)
+    )
+
+    return [{"score": float(x)} for x in refclipscores]
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, help="Input JSON file path.")
@@ -347,7 +487,11 @@ def main():
         "bleu-4",
         "meteor",
         "rouge",
+        "cider",
+        # "spice",
         "bertscore",
+        "clipscore",
+        "clipscore_ref",
     ]:
         start_time = time.time()
         print(f"Evaluating {metric}...")
@@ -378,6 +522,19 @@ def main():
                     scores = execute_rouge(candidates[model], references)
                 elif metric == "bertscore":
                     scores = execute_bertscore(candidates[model], references)
+                elif metric == "cider":
+                    average, scores = execute_cider(candidates[model], references)
+                    scores = [{"score": x} for x in scores]
+                elif metric == "spice":
+                    average, scores = execute_spice(candidates[model], references)
+                    print(f"SPICE: {average}")
+                    print(f"SPICE scores: {scores}")
+                elif metric == "clipscore":
+                    scores = execute_clipscore(candidates[model], image_files)
+                elif metric == "clipscore_ref":
+                    scores = execute_clipscore_ref(
+                        candidates[model], references, image_files
+                    )
 
                 # add to merged_evals
                 if len(current_eval) == 0:
