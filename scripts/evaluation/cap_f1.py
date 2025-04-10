@@ -820,13 +820,6 @@ def calculate_recall_gpt_fewshot(T_atomics, g_atomics):
 
     ]
 
-
-
- 
-
-
-
-
     messages = [system_message] + few_shot_examples + [user_message]
     return call_gpt4o_assist(messages, Recall)
 
@@ -847,7 +840,8 @@ def calculate_precision_gpt_fewshot(human_captions, g_atomics):
             "3. If the statement includes details that are not found or are contradicted by the captions, mark it as a False Positive (FP).\n"
             "4. Accept paraphrased or partially matching statements as TP if the core meaning aligns.\n"
             "5. Do not make assumptions based on common knowledge, visual conventions, or brand familiarity unless explicitly mentioned in the captions.\n"
-            "6. When listing TPs and FPs, you must use the exact original string of the generated atomic statements. Do not paraphrase, shorten, fix grammar, or modify in any way. The response must copy the sentence exactly as shown.\n\n"
+            "6. Avoid inferring visual details such as color or design purely from product names or brand recognition.\n"
+            "7. When listing TPs and FPs, you must use the exact original string of the generated atomic statements. Do not paraphrase, shorten, fix grammar, or modify in any way. The response must copy the sentence exactly as shown.\n\n"
             "Provide your response in JSON format."
         )
     }
@@ -904,18 +898,18 @@ def calculate_precision_gpt_fewshot(human_captions, g_atomics):
                 '    "There is a can.",\n'
                 '    "The can is on a wooden surface.",\n'
                 '    "The text reads \'WT. 15 OZ. (425g)\'",\n'
-                '    "The text includes part of the word \'TIONAL\'.",\n'
                 '    "The label has a yellow color.",\n'
                 '    "The label has a red color."\n'
                 '  ],\n'
                 '  "FPs": [\n'
+                '    "The text includes part of the word \'TIONAL\'.",\n'
                 '    "The can has visible text."\n'
                 '  ],\n'
                 '  "Match": [\n'
                 '    {"g_atomic": "There is a can.", "T_org": "A can with a yellow and red label sits on a wooden table."},\n'
                 '    {"g_atomic": "The can is on a wooden surface.", "T_org": "A canned food that has a yellow, green, and red label on a wooden surface."},\n'
                 '    {"g_atomic": "The text reads \'WT. 15 OZ. (425g)\'", "T_org": "A 15 ounce (425g) can of traditional style spaghetti sauce."},\n'
-                '    {"g_atomic": "The text includes part of the word \'TIONAL\'.", "T_org": "A photo of a yellow can of national tomato paste sitting on a counter."},\n'
+                # '    {"g_atomic": "The text includes part of the word \'TIONAL\'.", "T_org": "A photo of a yellow can of national tomato paste sitting on a counter."},\n'
                 '    {"g_atomic": "The label has a yellow color.", "T_org": "A can with a yellow and red label sits on a wooden table."},\n'
                 '    {"g_atomic": "The label has a red color.", "T_org": "A can with a yellow and red label sits on a wooden table."}\n'
                 '  ],\n'
@@ -950,16 +944,17 @@ def calculate_precision_gpt_fewshot(human_captions, g_atomics):
                 '    "There is a red package.",\n'
                 '    "The package is labeled \\"GEVALIA KAFFE Raspberry Danish Artificially Flavored Ground Coffee\\".",\n'
                 '    "There is a kitchen appliance.",\n'
+                '  ],\n'
+                '  "FPs": [\n'
                 '    "The kitchen appliance is black and white.",\n'
                 '    "The kitchen appliance is partially visible."\n'
                 '  ],\n'
-                '  "FPs": [],\n'
                 '  "Match": [\n'
                 '    {"g_atomic": "There is a red package.", "T_org": "Red box with raspberry flavored ground coffee on table."},\n'
                 '    {"g_atomic": "The package is labeled \\"GEVALIA KAFFE Raspberry Danish Artificially Flavored Ground Coffee\\".", "T_org": "A package of Gevalia Kaffe brand raspberry flavored ground coffee"},\n'
                 '    {"g_atomic": "There is a kitchen appliance.", "T_org": "A red box of Kaffe placed next to a washing machine."},\n'
-                '    {"g_atomic": "The kitchen appliance is black and white.", "T_org": "A red box of Kaffe placed next to a washing machine."},\n'
-                '    {"g_atomic": "The kitchen appliance is partially visible.", "T_org": "A red box of Kaffe placed next to a washing machine."}\n'
+                # '    {"g_atomic": "The kitchen appliance is black and white.", "T_org": "A red box of Kaffe placed next to a washing machine."},\n'
+                # '    {"g_atomic": "The kitchen appliance is partially visible.", "T_org": "A red box of Kaffe placed next to a washing machine."}\n'
                 '  ],\n'
                 '  "Counts": {"TP": 5, "FP": 0}\n'
                 '}'
