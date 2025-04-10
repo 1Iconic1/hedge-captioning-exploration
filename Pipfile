@@ -27,6 +27,19 @@ torchvision = "*"
 bitsandbytes = "*"
 seaborn = "*"
 openai = "*"
+evaluate = "*"
+nltk = "*"
+rouge-score = "*"
+pydantic = "*"
+sentence-transformers = "*"
+scikit-learn = "*"
+pingouin = "*"
+protobuf = "*"
+sentencepiece = "*"
+tiktoken = "*"
+pycocoevalcap = {git = "https://github.com/jmhessel/pycocoevalcap.git"}
+clip = {git = "https://github.com/openai/CLIP.git"}
+bert-score = {git = "https://github.com/Accessibility-Research-Collective-UCI/bert_score_with_best_ref.git"}
 
 [dev-packages]
 black = {extras = ["jupyter"], version = "*"}

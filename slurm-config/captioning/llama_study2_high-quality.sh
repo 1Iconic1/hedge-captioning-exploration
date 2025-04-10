@@ -5,10 +5,10 @@
 #SBATCH --mem 64000        	                              # Reserve 64 GB RAM for the job
 #SBATCH --time 4-00:00    	                              # Max Runtime in D-HH:MM
 #SBATCH --partition liv.p    	                          # Partition to submit to
-#SBATCH --job-name molmo_study2                           # The name of the job that is running
-#SBATCH --output /scratch/kapil/slurm-molmo-study2.out    # File to which STDOUT will be written, %j inserts jobid
-#SBATCH --error /scratch/kapil/slurm-molmo-study2.err  	  # File to which STDERR will be written, %j inserts jobid
-#SBATCH --nodelist bird                                   # run only on birdy
+#SBATCH --job-name llama_study2_high-quality              # The name of the job that is running
+#SBATCH --output /scratch/kapil/slurm-llama-study2-high-quality-full.out    # File to which STDOUT will be written, %j inserts jobid
+#SBATCH --error /scratch/kapil/slurm-llama-study2-high-quality-full.err  	  # File to which STDERR will be written, %j inserts jobid
+#SBATCH --nodelist bird                                   # run only on bird
 
 # activate shell
 source /home/kapilg/.local/share/virtualenvs/local-blurred-captioning-exploration-bH5G8VRE/bin/activate
@@ -17,7 +17,10 @@ source /home/kapilg/.local/share/virtualenvs/local-blurred-captioning-exploratio
 cd /home/kapilg/projects/local-blurred-captioning-exploration/scripts/
 
 # run code
-python molmo_captioner.py --start 0 --end 5
+python llama_captioner.py \
+    --input-file "../data/study-2-input/high-quality-image_iq-1_text-no-text.json" \
+    --output-dir "../data/study-2-output/labeled-data/high-quality-images/llama-caption-output" \
+    --scratch-path "../data/scratch/study-2/llama-caption-output"
 
 # deactivate environment
 exit
