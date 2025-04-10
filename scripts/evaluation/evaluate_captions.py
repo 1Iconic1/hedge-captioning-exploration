@@ -583,7 +583,8 @@ def main():
 
         # check if the data has already been evaluated
         already_evaluated = check_if_evaluated(data, metric)
-        if already_evaluated is None:
+        # TODO: temporarily force bertscore to be evaluated
+        if already_evaluated is None and metric != "bertscore":
             # loop over models
             for model in candidates.keys():
                 # finally, compute the scores for the current model and metric
