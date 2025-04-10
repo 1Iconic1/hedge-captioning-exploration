@@ -1174,8 +1174,8 @@ def evaluate_single_instance(model_name, T_atomics, T_original, g_captions, prin
         print("T original \n", json.dumps(T_original, indent=4, ensure_ascii=False))
         print(f"{model_name} g atomics \n", json.dumps(g_captions, indent=4, ensure_ascii=False))
 
-    recall_result = calculate_recall_gpt(T_atomics, g_captions)
-    precision_result = calculate_precision_gpt(T_original, g_captions)
+    recall_result = calculate_recall_gpt_fewshot(T_atomics, g_captions)
+    precision_result = calculate_precision_gpt_fewshot(T_original, g_captions)
 
     check_consistency(
         model_name=model_name,
