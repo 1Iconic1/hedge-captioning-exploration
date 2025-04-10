@@ -25,7 +25,7 @@ import json
 import copy
 from datetime import datetime
 import time
-
+from tqdm import tqdm
 import evaluate
 import torch
 from sentence_transformers import SentenceTransformer
@@ -583,8 +583,7 @@ def main():
 
         # check if the data has already been evaluated
         already_evaluated = check_if_evaluated(data, metric)
-        # TODO: temporarily force bertscore to be evaluated
-        if already_evaluated is None and metric != "bertscore":
+        if already_evaluated is None:
             # loop over models
             for model in candidates.keys():
                 # finally, compute the scores for the current model and metric
@@ -651,7 +650,8 @@ def main():
         print(f"{metric} complete. Took {time.time() - start_time:.4f} seconds.\n")
 
     # attach all_image_evals to the data object
-    for index, image in enumerate(data):
+    print(f"Attaching evaluation results to data and computing caption similarity...")
+    for index, image in enumerate(tqdm(data)):
         # check if evaluation exists and save score
         if "evaluation" not in image:
             image["evaluation"] = {}
