@@ -28,6 +28,8 @@ import time
 
 import evaluate
 import torch
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_distances
 from bert_score import score
 from pycocoevalcap.tokenizer.ptbtokenizer import PTBTokenizer
 from pycocoevalcap.spice.spice import Spice
@@ -402,6 +404,72 @@ def execute_clipscore_ref(candidates, references, image_files):
     return [{"score": float(x)} for x in refclipscores]
 
 
+def get_sentences_from_human_captions(data_for_image):
+    """
+    Get the sentences from the human captions for the current image.
+
+    Args:
+        data_for_image (dict): dictionary containing the data for the current image. Must contain a "human_captions" key that has a list of dictionaries with a "caption" key.
+
+    Returns:
+        list of str: list of sentences from the human captions.
+    """
+    return [
+        caption["caption"]
+        for caption in data_for_image["human_captions"]
+        if caption["caption"]
+        != "Quality issues are too severe to recognize visual content."
+    ]
+
+
+def compute_caption_similarity(
+    captions, model=SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+):
+    """
+    Compute the pairwise cosine distance between the sentences in the captions.
+
+    Args:
+        captions (list of str): list of sentences from the human captions.
+        model (SentenceTransformer): model to use for sentence embedding.
+
+    Returns:
+        tuple: tuple containing the pairwise cosine distance and the pairwise distance matrix.
+    """
+    embeddings = model.encode(captions)
+    pairwise_dist = cosine_distances(embeddings)
+
+    # extract upper triangle of distance matrix (excluding diagonal)
+    triu_indices = np.triu_indices(len(captions), k=1)
+    similarities = pairwise_dist[triu_indices]
+
+    return similarities, pairwise_dist
+
+
+def compute_similiary_stats(similiarity_list):
+    """
+    Compute the minimum, maximum, mean, standard deviation, and variance of the pairwise cosine distances.
+
+    Args:
+        similiarity_list (list of float): list of pairwise cosine distances.
+
+    Returns:
+        tuple: tuple containing the minimum, maximum, mean, standard deviation, and variance of the pairwise cosine distances.
+    """
+    min_similarity = np.min(similiarity_list)
+    max_similarity = np.max(similiarity_list)
+    mean_similarity = np.mean(similiarity_list)
+    std_similarity = np.std(similiarity_list)
+    variance_similarity = np.var(similiarity_list)
+
+    return (
+        min_similarity,
+        max_similarity,
+        mean_similarity,
+        std_similarity,
+        variance_similarity,
+    )
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, help="Input JSON file path.")
@@ -520,38 +588,43 @@ def main():
             for model in candidates.keys():
                 # finally, compute the scores for the current model and metric
                 print(f"---for {model}...", end="", flush=True)
-                if metric == "bleu-1":
-                    order = 1
-                    scores = execute_bleu(candidates[model], references, order)
-                elif metric == "bleu-2":
-                    order = 2
-                    scores = execute_bleu(candidates[model], references, order)
-                elif metric == "bleu-3":
-                    order = 3
-                    scores = execute_bleu(candidates[model], references, order)
-                elif metric == "bleu-4":
-                    order = 4
-                    scores = execute_bleu(candidates[model], references, order)
-                elif metric == "meteor":
-                    scores = execute_meteor(candidates[model], references)
-                elif metric == "rouge":
-                    scores = execute_rouge(candidates[model], references)
-                elif metric == "bertscore":
-                    scores = execute_bertscore(
-                        candidates[model], references, device=device_type
-                    )
-                    print(scores)
-                elif metric == "cider":
-                    average, scores = execute_cider(candidates[model], references)
-                    scores = [{"score": x} for x in scores]
-                elif metric == "spice":
-                    average, scores = execute_spice(candidates[model], references)
-                elif metric == "clipscore":
-                    scores = execute_clipscore(candidates[model], image_files)
-                elif metric == "clipscore_ref":
-                    scores = execute_clipscore_ref(
-                        candidates[model], references, image_files
-                    )
+
+                # catch errors if any metric fails to execute
+                try:
+                    if metric == "bleu-1":
+                        order = 1
+                        scores = execute_bleu(candidates[model], references, order)
+                    elif metric == "bleu-2":
+                        order = 2
+                        scores = execute_bleu(candidates[model], references, order)
+                    elif metric == "bleu-3":
+                        order = 3
+                        scores = execute_bleu(candidates[model], references, order)
+                    elif metric == "bleu-4":
+                        order = 4
+                        scores = execute_bleu(candidates[model], references, order)
+                    elif metric == "meteor":
+                        scores = execute_meteor(candidates[model], references)
+                    elif metric == "rouge":
+                        scores = execute_rouge(candidates[model], references)
+                    elif metric == "cider":
+                        average, scores = execute_cider(candidates[model], references)
+                        scores = [{"score": x} for x in scores]
+                    elif metric == "spice":
+                        average, scores = execute_spice(candidates[model], references)
+                    elif metric == "bertscore":
+                        scores = execute_bertscore(
+                            candidates[model], references, device=device_type
+                        )
+                    elif metric == "clipscore":
+                        scores = execute_clipscore(candidates[model], image_files)
+                    elif metric == "clipscore_ref":
+                        scores = execute_clipscore_ref(
+                            candidates[model], references, image_files
+                        )
+                except Exception as e:
+                    print(f"Error evaluating {metric}: {e}")
+                    scores = [{"score": None} for _ in range(len(candidates[model]))]
 
                 # add to merged_evals
                 if len(current_eval) == 0:
@@ -582,6 +655,22 @@ def main():
         if "evaluation" not in image:
             image["evaluation"] = {}
         image["evaluation"] = copy.deepcopy(all_image_evals[index])
+
+        # add sentence similarity
+        curr_sentences = get_sentences_from_human_captions(image)
+        curr_similarities, pairwise_dist = compute_caption_similarity(curr_sentences)
+        curr_stats = compute_similiary_stats(curr_similarities)
+
+        image["human_caption_similarity"] = {
+            "sentences": curr_sentences,  # this is redundant but keep for now
+            "similarities": [float(x) for x in curr_similarities],
+            "pairwise_distances": pairwise_dist.tolist(),
+            "min_similarity": float(curr_stats[0]),
+            "max_similarity": float(curr_stats[1]),
+            "mean_similarity": float(curr_stats[2]),
+            "std_similarity": float(curr_stats[3]),
+            "variance_similarity": float(curr_stats[4]),
+        }
 
     # export results
     # check if output directory exists
