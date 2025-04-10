@@ -138,6 +138,7 @@ def save_results_json(
     parsed_T= None,
     T_atomics=None,
     g_atomics=None,
+    T_org=None, 
     metadata=None,
     evaluations=None,
     metric_name="cap_f1",
@@ -192,6 +193,13 @@ def save_results_json(
                     for model_entry in g_atomics[i]
                 }
                 item["evaluation"].setdefault("cap_f1", {})["g_atomics"] = model_outputs
+            
+            if T_org:
+                item["evaluation"].setdefault("cap_f1", {})["T_org"] = [
+                    line.strip()
+                    for line in T_org[i]
+                    if line.strip()
+                ]
 
     if metadata:
         for i in range(min(len(results), len(metadata))):
@@ -559,7 +567,6 @@ def calculate_recall_gpt(T_atomics, g_atomics):
 
     return call_gpt4o(system_message, user_message, Recall)
 
-
 def calculate_precision_gpt(human_captions, g_atomics):
     """
     Call GPT to evaluate the semantic precision between human-written captions and model-generated atomic statements.
@@ -602,6 +609,411 @@ def calculate_precision_gpt(human_captions, g_atomics):
     )
 
     return call_gpt4o(system_message, user_message, Precision)
+
+def calculate_recall_gpt_fewshot(T_atomics, g_atomics):
+    """
+    Call GPT to evaluate semantic recall between human-written (T_atomics)
+    and model-generated (g_atomics) atomic statements.
+    """
+    system_message = {
+        "role": "system",
+        "content": (
+        "You are an assistant tasked with determining the semantic equivalence between two sets of atomic sentences. "
+        "The first set consists of atomic statements extracted from human-written sentences. "
+        "The second set consists of atomic statements extracted from AI-generated sentences. "
+        "The goal of this task is to calculate recall metrics. "
+        "Definitions:\n"
+        "- True Positive (TP): A human-written atomic statement whose meaning is clearly captured by at least one generated atomic statement.\n"
+        "- False Negative (FN): A human-written atomic statement that is not captured or reflected in any generated statement.\n\n"
+        "Instructions:\n"
+        "1. For each human-written atomic statement, check whether any of the model-generated statements express the same core meaning.\n"
+        "2. If the meaning is directly stated or clearly implied (without requiring external knowledge or creative inference), include the human-written statement in the True Positives (TPs).\n"
+        "3. If the meaning is not directly stated or clearly implied, include the human-written statement in the False Negatives (FNs).\n"
+        "4. The sum of the number of TPs and FNs should equal the number of human-written atomic statements.\n"
+        "5. Use common-sense understanding when deciding if the meaning is implied — for example, if a title or visual element is described, it's reasonable to assume the cover is visible.\n"
+        "6. Do NOT include any model-generated statements in the output.\n"
+        "7. Avoid using outside knowledge or making assumptions beyond what is explicitly or clearly implied in the statements.\n\n"
+        "Provide your response in JSON format."
+        )
+    }
+
+    user_message = {
+        "role": "user",
+        "content": (
+        "Human-written atomic statements:\n"
+        + "\n".join(T_atomics)
+        + "\n\nGenerated atomic statements:\n"
+        + "\n".join(g_atomics)
+        + "\n\nReturn a JSON object in the following format:\n"
+        "{\n"
+        '  "TPs": [list of human-written statements that are matched],\n'
+        '  "FNs": [list of human-written statements that are not matched],\n'
+        '  "Match": [\n'
+        '    {"T_atomic": "<human-written statement>", "g_atomic": "<matched generated statement>"},\n'
+        '    ...\n'
+        '  ],\n'
+        '  "Counts": {"TP": number, "FN": number}\n'
+        "}\n\n"
+        "Again, ONLY include the human-written statements in TPs and FNs. Do NOT include any generated statements directly in those lists. "
+        "Use the 'Match' field to show which human-written statements matched which generated ones. "
+        "Every sentence in the `TPs` list must exactly match one of the `T_atomic` values in the `Match` field."
+        "Only return the JSON object. Do NOT include any explanations or markdown formatting."
+    )}
+
+
+    few_shot_examples = [
+        # Example 1: VizWiz_train_00000283.jpg
+        {
+            "role": "user",
+            "content": (
+                "Human-written atomic statements:\n"
+                "The canned food has a yellow label.\n"
+                "The canned food has a green label.\n"
+                "The canned food has a red label.\n"
+                "The canned food is on a wooden surface.\n"
+                "The can is 15 ounces.\n"
+                "The can is 425 grams.\n"
+                "The can contains spaghetti sauce.\n"
+                "The spaghetti sauce is traditional style.\n"
+                "The can is small.\n"
+                "The picture shows red pasta sauce.\n"
+                "The picture shows noodles.\n"
+                "The can is of national tomato paste.\n"
+                "The table is made of wood."
+            )
+        },
+        {
+            "role": "assistant",
+            "content": (
+                '{\n'
+                '  "TPs": [\n'
+                '    "The canned food is on a wooden surface.",\n'
+                '    "The can is 15 ounces.",\n'
+                '    "The can is 425 grams.",\n'
+                '    "The canned food has a yellow label.",\n'
+                '    "The canned food has a red label.",\n'
+                '    "The can is of national tomato paste."\n'
+                '  ],\n'
+                '  "FNs": [\n'
+                '    "The canned food has a green label.",\n'
+                '    "The can contains spaghetti sauce.",\n'
+                '    "The spaghetti sauce is traditional style.",\n'
+                '    "The can is small.",\n'
+                '    "The picture shows red pasta sauce.",\n'
+                '    "The picture shows noodles.",\n'
+                '    "The table is made of wood."\n'
+                '  ],\n'
+                '  "Match": [\n'
+                '    {"T_atomic": "The canned food is on a wooden surface.", "g_atomic": "The can is on a wooden surface."},\n'
+                '    {"T_atomic": "The can is 15 ounces.", "g_atomic": "The text reads \'WT. 15 OZ. (425g)\'."},\n'
+                '    {"T_atomic": "The can is 425 grams.", "g_atomic": "The text reads \'WT. 15 OZ. (425g\'."},\n'
+                '    {"T_atomic": "The canned food has a yellow label.", "g_atomic": "The label has a yellow color."},\n'
+                '    {"T_atomic": "The canned food has a red label.", "g_atomic": "The label has a red color."},\n'
+                '    {"T_atomic": "The can is of national tomato paste.", "g_atomic": "The text includes part of the word \'TIONAL\'."}\n'
+                '  ],\n'
+                '  "Counts": {"TP": 6, "FN": 7}\n'
+                '}'
+            )
+        },
+
+        # Example 2: VizWiz_train_00000196.jpg
+        {
+            "role": "user",
+            "content": (
+                "Human-written atomic statements:\n"
+                "The box is red.\n"
+                "The box is placed next to a washing machine.\n"
+                "There is a washing machine.\n"
+                "The package is of Gevalia Kaffe brand.\n"
+                "The package contains ground coffee.\n"
+                "The coffee is raspberry flavored.\n"
+                "The flavor is Raspberry Danish.\n"
+                "The box is on a table.\n\n"
+                "Generated atomic statements:\n"
+                "- There is a red package.\n"
+                "- The package is labeled \"GEVALIA KAFFE Raspberry Danish Artificially Flavored Ground Coffee\".\n"
+                "- There is a kitchen appliance.\n"
+                "- The kitchen appliance is black and white.\n"
+                "- The kitchen appliance is partially visible."
+            )
+        },
+        {
+            "role": "assistant",
+            "content": (
+                '{\n'
+                '  "TPs": [\n'
+                '    "The box is red.",\n'
+                '    "There is a washing machine.",\n'
+                '    "The package is of Gevalia Kaffe brand.",\n'
+                '    "The coffee is raspberry flavored.",\n'
+                '    "The flavor is Raspberry Danish."\n'
+                '  ],\n'
+                '  "FNs": [\n'
+                '    "The box is placed next to a washing machine.",\n'
+                '    "The package contains ground coffee.",\n'
+                '    "The box is on a table."\n'
+                '  ],\n'
+                '  "Match": [\n'
+                '    {"T_atomic": "The box is red.", "g_atomic": "There is a red package."},\n'
+                '    {"T_atomic": "There is a washing machine.", "g_atomic": "There is a kitchen appliance."},\n'
+                '    {"T_atomic": "The package is of Gevalia Kaffe brand.", "g_atomic": "The package is labeled \"GEVALIA KAFFE Raspberry Danish Artificially Flavored Ground Coffee\"."},\n'
+                '    {"T_atomic": "The coffee is raspberry flavored.", "g_atomic": "The package is labeled \"GEVALIA KAFFE Raspberry Danish Artificially Flavored Ground Coffee\"."},\n'
+                '    {"T_atomic": "The flavor is Raspberry Danish.", "g_atomic": "The package is labeled \"GEVALIA KAFFE Raspberry Danish Artificially Flavored Ground Coffee\"."}\n'
+                '  ],\n'
+                '  "Counts": {"TP": 5, "FN": 3}\n'
+                '}'
+            )
+        }, 
+        # Example 3: VizWiz_train_00000457.jpg
+        {
+            "role": "user",
+            "content": (
+                "Human-written atomic statements:\n"
+                "There is a bottle.\n"
+                "The bottle contains shoe polish.\n"
+                "The shoe polish is for leather shoes.\n"
+                "The shoe polish is made by a company called Kiwi.\n"
+                "The container is being held up.\n"
+                "The shoe polish is labeled as cuir.\n"
+                "The shoe polish is labeled as premiere shine.\n"
+                "The shoe polish is labeled as ultra brilliant.\n"
+                "There is a liquid.\n"
+                "The liquid is used for food.\n\n"
+                "Generated atomic statements:\n"
+                "- A person is holding a container.\n"
+                "- The container is a Kiwi brand product.\n"
+                "- The product is for leather care.\n"
+                "- The product is designed for shoe care.\n"
+                "- The container is labeled \"Premiere Shine Ultra-Brillant.\"\n"
+                "- The container is primarily red.\n"
+                "- The container is primarily black.\n"
+                "- There is a sponge applicator at the top of the container."
+            )
+        },
+        {
+            "role": "assistant",
+            "content": (
+                '{\n'
+                '  "TPs": [\n'
+                '    "The container is being held up.",\n'
+                '    "The shoe polish is labeled as premiere shine.",\n'
+                '    "The shoe polish is labeled as ultra brilliant."\n'
+                '  ],\n'
+                '  "FNs": [\n'
+                '    "There is a bottle.",\n'
+                '    "The bottle contains shoe polish.",\n'
+                '    "The shoe polish is for leather shoes.",\n'
+                '    "The shoe polish is made by a company called Kiwi.",\n'
+                '    "The shoe polish is labeled as cuir.",\n'
+                '    "There is a liquid.",\n'
+                '    "The liquid is used for food."\n'
+                '  ],\n'
+                '  "Match": [\n'
+                '    {"T_atomic": "The container is being held up.", "g_atomic": "A person is holding a container."},\n'
+                '    {"T_atomic": "The shoe polish is labeled as premiere shine.", "g_atomic": "The container is labeled \"Premiere Shine Ultra-Brillant.\""},\n'
+                '    {"T_atomic": "The shoe polish is labeled as ultra brilliant.", "g_atomic": "The container is labeled \"Premiere Shine Ultra-Brillant.\""}\n'
+                '  ],\n'
+                '  "Counts": {"TP": 3, "FN": 7}\n'
+                '}'
+            )
+        }
+
+    ]
+
+    messages = [system_message] + few_shot_examples + [user_message]
+    return call_gpt4o_assist(messages, Recall)
+
+def calculate_precision_gpt_fewshot(human_captions, g_atomics):
+    system_message = {
+        "role": "system",
+        "content": (
+            "You are an assistant tasked with determining the semantic equivalence between two sets of sentences. "
+            "The first set consists of human-written sentences. "
+            "The second set consists of atomic statements extracted from AI-generated sentences. "
+            "The goal of this task is to calculate precision metrics. "
+            "Definitions:\n"
+            "- True Positive (TP): A generated atomic statement that is semantically supported by, or reasonably implied by, at least one human-written caption. Exact wording is not required.\n"
+            "- False Positive (FP): A generated atomic statement that introduces information not present in, or contradictory to, any of the human-written captions.\n\n"
+            "Instructions:\n"
+            "1. Evaluate each generated atomic statement independently.\n"
+            "2. If the core meaning of a generated statement is explicitly stated or reasonably implied by any human-written caption, mark it as a True Positive (TP).\n"
+            "3. If the statement includes details that are not found or are contradicted by the captions, mark it as a False Positive (FP).\n"
+            "4. Accept paraphrased or partially matching statements as TP if the core meaning aligns.\n"
+            "5. Do not make assumptions based on common knowledge, visual conventions, or brand familiarity unless explicitly mentioned in the captions.\n"
+            "6. Avoid inferring visual details such as color or design purely from product names or brand recognition.\n"
+            "7. When listing TPs and FPs, you must use the exact original string of the generated atomic statements. Do not paraphrase, shorten, fix grammar, or modify in any way. The response must copy the sentence exactly as shown.\n\n"
+            "Provide your response in JSON format."
+        )
+    }
+
+    user_message = {
+        "role": "user",
+        "content": (
+            "Human-written captions:\n"
+            + "\n".join(f"- {caption}" for caption in human_captions)
+            + "\n\nGenerated atomic statements:\n"
+            + "\n".join(f"- {statement}" for statement in g_atomics)
+            + "\n\nReturn a JSON object in the following format:\n"
+            '{\n'
+            '  "TPs": [list of true positive generated atomic statements],\n'
+            '  "FPs": [list of false positive generated atomic statements],\n'
+            '  "Match": [\n'
+            '    {"g_atomic": "<exact generated atomic statement>", "T_org": "<matching human-written caption>"},\n'
+            '    ...\n'
+            '  ],\n'
+            '  "Counts": {"TP": number, "FP": number}\n'
+            '}\n\n'
+            "Only return the JSON object. Do NOT include any explanations or markdown formatting.\n"
+            "Use the 'Match' field to show the most relevant human-written caption that justifies each TP.\n"
+            "Every sentence in the `TPs` list must exactly match one of the `g_atomic` values in the `Match` field."
+        )
+    }
+
+    few_shot_examples = [
+        # Example 1: VizWiz_train_00000283.jpg
+        {
+            "role": "user",
+            "content": (
+                "Human-written captions:\n"
+                "- A canned food that has a yellow, green, and red label on a wooden surface.\n"
+                "- A 15 ounce (425g) can of traditional style spaghetti sauce.\n"
+                "- A small can with a picture of red pasta sauce on top of noodles on a table.\n"
+                "- A photo of a yellow can of national tomato paste sitting on a counter.\n"
+                "- A can with a yellow and red label sits on a wooden table.\n\n"
+                "Generated atomic statements:\n"
+                "- There is a can.\n"
+                "- The can is on a wooden surface.\n"
+                "- The can has visible text.\n"
+                "- The text reads 'WT. 15 OZ. (425g)'.\n"
+                "- The text includes part of the word 'TIONAL'.\n"
+                "- The label has a yellow color.\n"
+                "- The label has a red color."
+            )
+        },
+        {
+            "role": "assistant",
+            "content": (
+                '{\n'
+                '  "TPs": [\n'
+                '    "There is a can.",\n'
+                '    "The can is on a wooden surface.",\n'
+                '    "The text reads \'WT. 15 OZ. (425g)\'",\n'
+                '    "The label has a yellow color.",\n'
+                '    "The label has a red color."\n'
+                '  ],\n'
+                '  "FPs": [\n'
+                '    "The text includes part of the word \'TIONAL\'.",\n'
+                '    "The can has visible text."\n'
+                '  ],\n'
+                '  "Match": [\n'
+                '    {"g_atomic": "There is a can.", "T_org": "A can with a yellow and red label sits on a wooden table."},\n'
+                '    {"g_atomic": "The can is on a wooden surface.", "T_org": "A canned food that has a yellow, green, and red label on a wooden surface."},\n'
+                '    {"g_atomic": "The text reads \'WT. 15 OZ. (425g)\'", "T_org": "A 15 ounce (425g) can of traditional style spaghetti sauce."},\n'
+                # '    {"g_atomic": "The text includes part of the word \'TIONAL\'.", "T_org": "A photo of a yellow can of national tomato paste sitting on a counter."},\n'
+                '    {"g_atomic": "The label has a yellow color.", "T_org": "A can with a yellow and red label sits on a wooden table."},\n'
+                '    {"g_atomic": "The label has a red color.", "T_org": "A can with a yellow and red label sits on a wooden table."}\n'
+                '  ],\n'
+                '  "Counts": {"TP": 6, "FP": 1}\n'
+                '}'
+            )
+        },
+
+
+        # Example 2: VizWiz_train_00000196.jpg
+        {
+            "role": "user",
+            "content": (
+                "Human-written captions:\n"
+                "- A red box of Kaffe placed next to a washing machine.\n"
+                "- A package of Gevalia Kaffe brand raspberry flavored ground coffee\n"
+                "- A box of Raspberry Danish flavored Gevalia coffee.\n"
+                "- Red box with raspberry flavored ground coffee on table.\n\n"
+                "Generated atomic statements:\n"
+                "- There is a red package.\n"
+                "- The package is labeled \"GEVALIA KAFFE Raspberry Danish Artificially Flavored Ground Coffee\".\n"
+                "- There is a kitchen appliance.\n"
+                "- The kitchen appliance is black and white.\n"
+                "- The kitchen appliance is partially visible."
+            )
+        },
+        {
+            "role": "assistant",
+            "content": (
+                '{\n'
+                '  "TPs": [\n'
+                '    "There is a red package.",\n'
+                '    "The package is labeled \\"GEVALIA KAFFE Raspberry Danish Artificially Flavored Ground Coffee\\".",\n'
+                '    "There is a kitchen appliance.",\n'
+                '  ],\n'
+                '  "FPs": [\n'
+                '    "The kitchen appliance is black and white.",\n'
+                '    "The kitchen appliance is partially visible."\n'
+                '  ],\n'
+                '  "Match": [\n'
+                '    {"g_atomic": "There is a red package.", "T_org": "Red box with raspberry flavored ground coffee on table."},\n'
+                '    {"g_atomic": "The package is labeled \\"GEVALIA KAFFE Raspberry Danish Artificially Flavored Ground Coffee\\".", "T_org": "A package of Gevalia Kaffe brand raspberry flavored ground coffee"},\n'
+                '    {"g_atomic": "There is a kitchen appliance.", "T_org": "A red box of Kaffe placed next to a washing machine."},\n'
+                # '    {"g_atomic": "The kitchen appliance is black and white.", "T_org": "A red box of Kaffe placed next to a washing machine."},\n'
+                # '    {"g_atomic": "The kitchen appliance is partially visible.", "T_org": "A red box of Kaffe placed next to a washing machine."}\n'
+                '  ],\n'
+                '  "Counts": {"TP": 5, "FP": 0}\n'
+                '}'
+            )
+        },
+
+        # Example 3: VizWiz_train_00000457.jpg
+        {
+            "role": "user",
+            "content": (
+                "Human-written captions:\n"
+                "- I believe this is a bottle of leather shoe polish for premium shine made by a company called kiwi.\n"
+                "- A container of Kiwi leather shiner is being held up.\n"
+                "- KIWI brand shoe polish - leather cuir premiere shine ultra brilliant\n"
+                "- some type of liquid stuff you can use for food\n\n"
+                "Generated atomic statements:\n"
+                "- A person is holding a container.\n"
+                "- The container is a Kiwi brand product.\n"
+                "- The product is for leather care.\n"
+                "- The product is designed for shoe care.\n"
+                "- The container is labeled \"Premiere Shine Ultra-Brillant.\"\n"
+                "- The container is primarily red.\n"
+                "- The container is primarily black.\n"
+                "- There is a sponge applicator at the top of the container."
+            )
+        },
+        {
+            "role": "assistant",
+            "content": (
+                '{\n'
+                '  "TPs": [\n'
+                '    "A person is holding a container.",\n'
+                '    "The container is a Kiwi brand product.",\n'
+                '    "The product is for leather care.",\n'
+                '    "The product is designed for shoe care.",\n'
+                '    "The container is labeled \\"Premiere Shine Ultra-Brillant.\\""\n'
+                '  ],\n'
+                '  "FPs": [\n'
+                '    "The container is primarily red.",\n'
+                '    "The container is primarily black.",\n'
+                '    "There is a sponge applicator at the top of the container."\n'
+                '  ],\n'
+                '  "Match": [\n'
+                '    {"g_atomic": "A person is holding a container.", "T_org": "A container of Kiwi leather shiner is being held up."},\n'
+                '    {"g_atomic": "The container is a Kiwi brand product.", "T_org": "KIWI brand shoe polish - leather cuir premiere shine ultra brilliant"},\n'
+                '    {"g_atomic": "The product is for leather care.", "T_org": "I believe this is a bottle of leather shoe polish for premium shine made by a company called kiwi."},\n'
+                '    {"g_atomic": "The product is designed for shoe care.", "T_org": "I believe this is a bottle of leather shoe polish for premium shine made by a company called kiwi."},\n'
+                '    {"g_atomic": "The container is labeled \\"Premiere Shine Ultra-Brillant.\\"", "T_org": "KIWI brand shoe polish - leather cuir premiere shine ultra brilliant"}\n'
+                '  ],\n'
+                '  "Counts": {"TP": 5, "FP": 3}\n'
+                '}'
+            )
+        }
+
+
+    ]
+
+    messages = [system_message] + few_shot_examples + [user_message]
+    return call_gpt4o_assist(messages, Precision)
 
 
 # This is only for testing the prompt
@@ -757,8 +1169,8 @@ def evaluate_single_instance(model_name, T_atomics, T_original, g_captions, prin
         print("T original \n", json.dumps(T_original, indent=4, ensure_ascii=False))
         print(f"{model_name} g atomics \n", json.dumps(g_captions, indent=4, ensure_ascii=False))
 
-    recall_result = calculate_recall_gpt(T_atomics, g_captions)
-    precision_result = calculate_precision_gpt(T_original, g_captions)
+    recall_result = calculate_recall_gpt_fewshot(T_atomics, g_captions)
+    precision_result = calculate_precision_gpt_fewshot(T_original, g_captions)
 
     check_consistency(
         model_name=model_name,
