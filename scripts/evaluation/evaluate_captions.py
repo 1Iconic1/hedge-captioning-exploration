@@ -219,6 +219,7 @@ def execute_bertscore(
     model_type="microsoft/deberta-xlarge-mnli",
     lang="en",
     rescale_with_baseline=False,
+    device=None,
 ):
     """
     Execute BERTScore evaluation.
@@ -230,26 +231,41 @@ def execute_bertscore(
         model_type (str): type of model to use for BERTScore evaluation
         lang (str): language of the captions for BERTScore evaluation
         rescale_with_baseline (bool): whether to rescale the scores with a baseline
-
+        device (str): device PyTorch should use for BERTScore calculation. by default, uses CPU or CUDA gpu.
     Returns:
         list of dict: list of dictionaries containing BERTScore (precision, recall, F1) for each image.
     """
-    P_lst, R_lst, F1_lst = score(
+    P_lst, R_lst, F1_lst, best_ref_indices = score(
         candidates,
         references,
         model_type=model_type,
         lang=lang,
         rescale_with_baseline=rescale_with_baseline,
+        device=device,
     )
     output = []
     for index in range(len(candidates)):
-        output.append(
-            {
-                "precision": float(P_lst[index]),
-                "recall": float(R_lst[index]),
-                "f1": float(F1_lst[index]),
-            }
-        )
+        # output should include precision, recall, f1, and best_ref_indices
+        curr_output = {
+            "precision": float(P_lst[index]),
+            "recall": float(R_lst[index]),
+            "f1": float(F1_lst[index]),
+            "best_ref_indices": [int(x) for x in best_ref_indices[index]],
+        }
+
+        # also attach the reference caption for each score
+        reference_captions = {}
+        for reference_index, metric_name in zip(
+            best_ref_indices[index],
+            ["precision", "recall", "f1"],
+        ):
+            reference_captions[f"{metric_name}_reference"] = references[index][
+                int(reference_index)
+            ]
+        curr_output["reference_captions"] = reference_captions
+
+        # attach to output
+        output.append(curr_output)
     return output
 
 
@@ -521,7 +537,10 @@ def main():
                 elif metric == "rouge":
                     scores = execute_rouge(candidates[model], references)
                 elif metric == "bertscore":
-                    scores = execute_bertscore(candidates[model], references)
+                    scores = execute_bertscore(
+                        candidates[model], references, device=device_type
+                    )
+                    print(scores)
                 elif metric == "cider":
                     average, scores = execute_cider(candidates[model], references)
                     scores = [{"score": x} for x in scores]

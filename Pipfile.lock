@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "4ca5f6a4e08aaf14c6d1e9ba166ccf70d2ae709c140aa42eb7be43426357970c"
+            "sha256": "01e4296a3b028313cc896211be6dbe3a85b114eaefe057562288eff6fee87eab"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -262,13 +262,9 @@
             "version": "==4.13.3"
         },
         "bert-score": {
-            "hashes": [
-                "sha256:8ffe5838eac8cdd988b8b1a896af7f49071188c8c011a1ed160d71a9899a2ba4",
-                "sha256:bbbb4c7fcdaa46d7681aff49f37f96faa09ed74e1b150e659bdc6b58a66989b9"
-            ],
-            "index": "pypi",
+            "git": "https://github.com/Accessibility-Research-Collective-UCI/bert_score_with_best_ref.git",
             "markers": "python_version >= '3.6'",
-            "version": "==0.3.13"
+            "ref": "1ecb415efaa48bd4d6ec073d14fb1886b7736925"
         },
         "bitsandbytes": {
             "hashes": [
@@ -907,12 +903,12 @@
         },
         "huggingface-hub": {
             "hashes": [
-                "sha256:0f6aa5ec5a4e68e5b9e45d556b4e5ea180c58f5a5ffa734e7f38c9d573028959",
-                "sha256:f379e8b8d0791295602538856638460ae3cf679c7f304201eb80fb98c771950e"
+                "sha256:68ff05969927058cfa41df4f2155d4bb48f5f54f719dd0390103eefa9b191e28",
+                "sha256:9a7897c5b6fd9dad3168a794a8998d6378210f5b9688d0dfc180b1a228dc2466"
             ],
             "index": "pypi",
             "markers": "python_full_version >= '3.8.0'",
-            "version": "==0.30.1"
+            "version": "==0.30.2"
         },
         "idna": {
             "hashes": [
@@ -3511,11 +3507,11 @@
         },
         "typing-extensions": {
             "hashes": [
-                "sha256:4b6cf02909eb5495cfbc3f6e8fd49217e6cc7944e145cdda8caa3734777f9e69",
-                "sha256:98795af00fb9640edec5b8e31fc647597b4691f099ad75f469a2616be1a76dff"
+                "sha256:a439e7c04b49fec3e5d3e2beaa21755cadbbdc391694e28ccdd36ca4a1408f8c",
+                "sha256:e6c81219bd689f51865d9e372991c540bda33a0379d5573cddb9a3a23f7caaef"
             ],
             "markers": "python_version >= '3.8'",
-            "version": "==4.13.1"
+            "version": "==4.13.2"
         },
         "typing-inspection": {
             "hashes": [
@@ -3543,11 +3539,11 @@
         },
         "urllib3": {
             "hashes": [
-                "sha256:1cee9ad369867bfdbbb48b7dd50374c0967a0bb7710050facf0dd6911440e3df",
-                "sha256:f8c5449b3cf0861679ce7e0503c7b44b5ec981bec0d1d3795a07f1ba96f0204d"
+                "sha256:414bc6535b787febd7567804cc015fee39daab8ad86268f1310a9250697de466",
+                "sha256:4e16665048960a0900c702d4a66415956a584919c03361cac9f1df5c5dd7e813"
             ],
             "markers": "python_version >= '3.9'",
-            "version": "==2.3.0"
+            "version": "==2.4.0"
         },
         "wcwidth": {
             "hashes": [
