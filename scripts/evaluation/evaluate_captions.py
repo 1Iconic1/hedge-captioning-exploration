@@ -222,6 +222,7 @@ def execute_bertscore(
     lang="en",
     rescale_with_baseline=False,
     device=None,
+    idf=False,
 ):
     """
     Execute BERTScore evaluation.
@@ -244,6 +245,7 @@ def execute_bertscore(
         lang=lang,
         rescale_with_baseline=rescale_with_baseline,
         device=device,
+        idf=idf,
     )
     output = []
     for index in range(len(candidates)):
@@ -574,6 +576,7 @@ def main():
         "cider",
         "spice",
         "bertscore",
+        "bertscore_idf",
         "clipscore",
         "clipscore_ref",
     ]:
@@ -615,6 +618,13 @@ def main():
                     elif metric == "bertscore":
                         scores = execute_bertscore(
                             candidates[model], references, device=device_type
+                        )
+                    elif metric == "bertscore_idf":
+                        scores = execute_bertscore(
+                            candidates[model],
+                            references,
+                            device=device_type,
+                            idf=True,
                         )
                     elif metric == "clipscore":
                         scores = execute_clipscore(candidates[model], image_files)

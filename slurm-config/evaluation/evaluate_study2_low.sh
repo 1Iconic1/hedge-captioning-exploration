@@ -19,7 +19,7 @@ cd /home/kapilg/projects/local-blurred-captioning-exploration/scripts/evaluation
 # low-quality images
 # this dataset has some evaluations computed
 python evaluate_captions.py \
-    --input ../../data/study-2-output/final-evaluated-captions/evaluation_results_5432-images_2025-04-03_11:27_fixed.json \
+    --input ../../data/study-2-output/final-evaluated-captions/low-quality_evaluation_5432-images_2025-04-10_15:29.json \
     --image-folder ../../data/caption-dataset/train \
     --output-dir ../../data/study-2-output/final-evaluated-captions
 
