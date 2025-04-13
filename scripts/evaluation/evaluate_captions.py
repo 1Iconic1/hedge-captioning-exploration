@@ -667,21 +667,26 @@ def main():
             image["evaluation"] = {}
         image["evaluation"] = copy.deepcopy(all_image_evals[index])
 
-        # add sentence similarity
-        curr_sentences = get_sentences_from_human_captions(image)
-        curr_similarities, pairwise_dist = compute_caption_similarity(curr_sentences)
-        curr_stats = compute_similiary_stats(curr_similarities)
+        # add sentence similarity if we have more than 1 human caption
+        if len(image["human_captions"]) > 1:
+            curr_sentences = get_sentences_from_human_captions(image)
+            curr_similarities, pairwise_dist = compute_caption_similarity(
+                curr_sentences
+            )
+            curr_stats = compute_similiary_stats(curr_similarities)
 
-        image["human_caption_similarity"] = {
-            "sentences": curr_sentences,  # this is redundant but keep for now
-            "similarities": [float(x) for x in curr_similarities],
-            "pairwise_distances": pairwise_dist.tolist(),
-            "min_similarity": float(curr_stats[0]),
-            "max_similarity": float(curr_stats[1]),
-            "mean_similarity": float(curr_stats[2]),
-            "std_similarity": float(curr_stats[3]),
-            "variance_similarity": float(curr_stats[4]),
-        }
+            image["human_caption_similarity"] = {
+                "sentences": curr_sentences,  # this is redundant but keep for now
+                "similarities": [float(x) for x in curr_similarities],
+                "pairwise_distances": pairwise_dist.tolist(),
+                "min_similarity": float(curr_stats[0]),
+                "max_similarity": float(curr_stats[1]),
+                "mean_similarity": float(curr_stats[2]),
+                "std_similarity": float(curr_stats[3]),
+                "variance_similarity": float(curr_stats[4]),
+            }
+        else:
+            image["human_caption_similarity"] = {}
 
     # export results
     # check if output directory exists
