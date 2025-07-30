@@ -14,12 +14,10 @@ import clip
 import torch
 from PIL import Image
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
-import torch
 import tqdm
 import numpy as np
 import sklearn.preprocessing
 import collections
-import warnings
 from packaging import version
 
 

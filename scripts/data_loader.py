@@ -171,6 +171,8 @@ if __name__ == "__main__":
         "../data/image-quality-assessment/annotations/train.json",
     )
     filtered_dataset = filter_dataset(pd.DataFrame.from_dict(image_captioning_input))
-    with open("../data/combined-vizwiz-train-input.json", "w", encoding='utf-8') as json_file:
+    with open(
+        "../data/combined-vizwiz-train-input.json", "w", encoding="utf-8"
+    ) as json_file:
         json.dump(filtered_dataset, json_file, indent=4)
     print(json.dumps(filtered_dataset[0], indent=4))

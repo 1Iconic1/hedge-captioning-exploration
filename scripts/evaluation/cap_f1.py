@@ -4,7 +4,6 @@ import pandas as pd
 from openai import OpenAI
 import os
 import evaluate
-from collections import Counter
 
 # from cider.cider import Cider
 from tqdm import tqdm
@@ -80,8 +79,6 @@ def read_json(caption_file, keys=None):
 
 
 # pick images to test if needed
-
-import json
 
 
 def select_data(image_list_file, json_file, output_file, prev=False):
@@ -221,9 +218,9 @@ def save_results_json(
                         "Counts": model_eval.get("precision", {}).get("Counts", {}),
                     },
                 }
-            results[i]["evaluation"].setdefault(metric_name, {})[
-                "metadata"
-            ] = metric_scores
+            results[i]["evaluation"].setdefault(metric_name, {})["metadata"] = (
+                metric_scores
+            )
 
     if evaluations and metric_name == "cap_f1":
         for i in range(min(len(results), len(evaluations))):

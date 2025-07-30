@@ -132,9 +132,9 @@ def format_as_csv(folder_path, timestamp):
         lines = []
         for m in match_list:
             if "T_atomic" in m and "g_atomic" in m:
-                lines.append(f'{m["T_atomic"]} : {m["g_atomic"]}')
+                lines.append(f"{m['T_atomic']} : {m['g_atomic']}")
             elif "g_atomic" in m and "T_org" in m:
-                lines.append(f'{m["g_atomic"]} : {m["T_org"]}')
+                lines.append(f"{m['g_atomic']} : {m['T_org']}")
             else:
                 lines.append(str(m))  # fallback for unexpected format
         return "\n".join(lines)

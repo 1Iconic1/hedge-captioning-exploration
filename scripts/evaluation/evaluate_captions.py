@@ -644,7 +644,7 @@ def main():
                     for index, score in enumerate(scores):
                         current_eval[index][metric][model] = score
 
-                print(f"complete.")
+                print("complete.")
         else:
             print(f"Captions already evaluated using {metric}. Skipping.")
             current_eval = [{metric: x} for x in already_evaluated]
@@ -660,7 +660,7 @@ def main():
         print(f"{metric} complete. Took {time.time() - start_time:.4f} seconds.\n")
 
     # attach all_image_evals to the data object
-    print(f"Attaching evaluation results to data and computing caption similarity...")
+    print("Attaching evaluation results to data and computing caption similarity...")
     for index, image in enumerate(tqdm(data)):
         # check if evaluation exists and save score
         if "evaluation" not in image:
