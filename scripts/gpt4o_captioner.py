@@ -42,6 +42,7 @@ def generate_caption(image_url, openai_client, prompt, temperature=1.0):
     Output:
     - (str): caption for image.
     """
+    # TODO: should add a try catch for API errors
     response = openai_client.responses.create(
         model=model_name,
         input=[
