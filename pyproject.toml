@@ -42,6 +42,7 @@ dependencies = [
     "torchaudio",
     "torchvision",
     "python-dotenv",
+    "tensorflow>=2.12.0",
 ]
 
 [tool.uv]
@@ -74,3 +75,8 @@ pycocoevalcap = { git = "https://github.com/jmhessel/pycocoevalcap.git" }
 clip = { git = "https://github.com/openai/CLIP.git" }
 bert-score = { git = "https://github.com/Accessibility-Research-Collective-UCI/bert_score_with_best_ref.git" }
 selfcheckgpt = { git = "https://github.com/Accessibility-Research-Collective-UCI/selfcheckgpt.git" }
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.2.0",
+]
