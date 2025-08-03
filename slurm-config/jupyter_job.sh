@@ -9,11 +9,11 @@
 #SBATCH --error /scratch/kapil/slurm.err  	# File to which STDERR will be written, %j inserts jobid
 #SBATCH --nodelist dizzy                     	# run only on dizzy
 
-# activate shell
-source /home/kapilg/.local/share/virtualenvs/local-blurred-captioning-exploration-bH5G8VRE/bin/activate
-
 # go to the correct directory
 cd /home/kapilg/projects/local-blurred-captioning-exploration/
+
+# activate shell 
+source .venv/bin/activate
 
 # run notebook
 jupyter lab --no-browser --port=9585
