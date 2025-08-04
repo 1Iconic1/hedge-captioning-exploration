@@ -249,8 +249,8 @@ def main():
     end_index = args.end if args.end is not None else len(dataset_to_caption)
 
     # model to use
-    model_name = "Molmo-7B-O-0924"
-    model_id = "allenai/Molmo-7B-O-0924"
+    model_name = "Molmo-7B-D-0924"
+    model_id = "allenai/Molmo-7B-D-0924"
 
     # generate output
     print(f"Generating caption output for {start_index} to {end_index} images...")
