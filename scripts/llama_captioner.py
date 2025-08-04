@@ -46,10 +46,11 @@ def generate_caption(
     """
     # process the image and text
     messages = [
-        {"role": "system", "content": prompt},
+        # {"role": "system", "content": prompt},
         {
             "role": "user",
             "content": [
+                {"type": "text", "text": prompt},
                 {"type": "image"},
             ],
         },
