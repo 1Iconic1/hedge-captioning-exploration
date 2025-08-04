@@ -23,8 +23,8 @@ from openai import OpenAI
 from tqdm import tqdm
 
 # custom imports
-from constants import get_prompt
-from data_loader import generate_target_dataset, filter_dataset
+from scripts.constants import get_prompt
+from scripts.data_loader import generate_target_dataset, filter_dataset
 
 model_name = "gpt-4o-2024-08-06"
 
@@ -61,6 +61,7 @@ def generate_caption(image_url, openai_client, prompt, temperature=1.0):
                     {
                         "type": "input_image",
                         "image_url": image_url,
+                        "detail": "high",
                     }
                 ],
             },

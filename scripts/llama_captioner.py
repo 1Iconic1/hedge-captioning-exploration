@@ -23,39 +23,8 @@ from PIL import Image
 from tqdm import tqdm
 
 # custom imports
-from constants import get_prompt
-from data_loader import generate_target_dataset, filter_dataset
-
-
-# setup pytorch
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # for multi-GPU systems, force single GPU
-if torch.cuda.is_available():
-    device_map = "cuda:0"  # force single, first GPU
-    device_type = "cuda"
-elif torch.backends.mps.is_available():
-    device_map = "auto"
-    device_type = "mps"
-else:
-    device_map = "auto"
-    device_type = "cpu"
-
-print(f"Using device: {device_type}")
-
-
-# load model
-model_name = "Llama-3.2-11B-Vision-Instruct"
-model_id = "meta-llama/Llama-3.2-11B-Vision-Instruct"
-model = MllamaForConditionalGeneration.from_pretrained(
-    model_id,
-    torch_dtype=torch.bfloat16,
-    device_map=device_map,
-)
-processor = AutoProcessor.from_pretrained(model_id)
-
-# print model properties
-print("Model ID: ", model_id)
-print("Device: ", model.device)
-print("Dtype: ", model.dtype)
+from scripts.constants import get_prompt
+from scripts.data_loader import generate_target_dataset, filter_dataset
 
 
 # captioning function
@@ -114,7 +83,12 @@ def generate_caption(
 
 
 def generate_caption_output(
-    image_captioning_input, image_folder, scratch_path, start_index
+    image_captioning_input,
+    image_folder,
+    scratch_path,
+    start_index,
+    model_name,
+    model_id,
 ):
     """
     Generates a caption for an image.
@@ -124,10 +98,39 @@ def generate_caption_output(
     - image_folder (str): path to image folder.
     - scratch_path (str): path to scratch folder where intermediate files will be stored.
     - start_index (int): start index of the dataset to caption.
+    - model_name (str): name of the model.
+    - model_id (str): id of the model.
 
     Output:
     - (list): list of dictionaries containing image annotations and image quality.
     """
+    # setup pytorch
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # for multi-GPU systems, force single GPU
+    if torch.cuda.is_available():
+        device_map = "cuda:0"  # force single, first GPU
+        device_type = "cuda"
+    elif torch.backends.mps.is_available():
+        device_map = "auto"
+        device_type = "mps"
+    else:
+        device_map = "auto"
+        device_type = "cpu"
+
+    print(f"Using device: {device_type}")
+
+    # load model
+    model = MllamaForConditionalGeneration.from_pretrained(
+        model_id,
+        torch_dtype=torch.bfloat16,
+        device_map=device_map,
+    )
+    processor = AutoProcessor.from_pretrained(model_id)
+
+    # print model properties
+    print("Model ID: ", model_id)
+    print("Device: ", model.device)
+    print("Dtype: ", model.dtype)
+
     # deepclone input where labels will be
     caption_output = copy.deepcopy(image_captioning_input)
 
@@ -227,6 +230,10 @@ def main():
     start_index = args.start
     end_index = args.end if args.end is not None else len(dataset_to_caption)
 
+    # model to use
+    model_name = "Llama-3.2-11B-Vision-Instruct"
+    model_id = "meta-llama/Llama-3.2-11B-Vision-Instruct"
+
     # generate output
     print(f"Generating caption output for {start_index} to {end_index} images...")
     print(f"Prompt: \n {get_prompt()}")
@@ -240,6 +247,8 @@ def main():
         "../data/caption-dataset/train",
         scratch_path,
         start_index,
+        model_name,
+        model_id,
     )
 
     # generate output path

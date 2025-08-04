@@ -23,53 +23,19 @@ from PIL import Image
 from tqdm import tqdm
 
 # custom imports
-from constants import get_prompt
-from data_loader import generate_target_dataset, filter_dataset
-
-
-# setup pytorch
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # for multi-GPU systems, force single GPU
-if torch.cuda.is_available():
-    device_map = "cuda:0"  # force single, first GPU
-    device_type = "cuda"
-    torch_dtype = "auto"
-elif torch.backends.mps.is_available():
-    device_map = "auto"
-    device_type = "mps"
-    torch_dtype = torch.bfloat16
-else:
-    device_map = "auto"
-    device_type = "cpu"
-    torch_dtype = torch.bfloat16
-print(f"Using device: {device_type}")
-
-
-# load model
-model_name = "Molmo-7B-O-0924"
-model_id = "allenai/Molmo-7B-O-0924"
-processor = AutoProcessor.from_pretrained(
-    model_id,
-    trust_remote_code=True,
-    torch_dtype=torch_dtype,
-    device_map=device_map,
-)
-
-model = AutoModelForCausalLM.from_pretrained(
-    model_id,
-    trust_remote_code=True,
-    torch_dtype=torch_dtype,
-    device_map=device_map,
-)
-
-# print model properties
-print("Model ID: ", model_id)
-print("Device: ", model.device)
-print("Dtype: ", model.dtype)
+from scripts.constants import get_prompt
+from scripts.data_loader import generate_target_dataset, filter_dataset
 
 
 # captioning function
 def generate_caption(
-    image_object, model, processor, prompt, temperature=1.0, do_sample=False
+    image_object,
+    model,
+    processor,
+    prompt,
+    temperature=1.0,
+    do_sample=False,
+    device_type="cuda",
 ):
     """
     Generates a caption for an image.
@@ -80,6 +46,7 @@ def generate_caption(
     - processor (torch processor): loaded processor for pre-processing inputs.
     - temperature (float; optional): temperature setting for model, greater than 0. Defaults to 1.0; lower values are more deterministic.
     - do_sample (boolean; optional): whether model should sample probabilities. Defaults to False -- greedy decoding.
+    - device_type (str; optional): type of device to use for captioning. Defaults to "cuda".
 
     Output:
     - (str): caption for image.
@@ -123,7 +90,12 @@ def generate_caption(
 
 
 def generate_caption_output(
-    image_captioning_input, image_folder, scratch_path, start_index
+    image_captioning_input,
+    image_folder,
+    scratch_path,
+    start_index,
+    model_name,
+    model_id,
 ):
     """
     Generates a caption for an image.
@@ -133,10 +105,48 @@ def generate_caption_output(
     - image_folder (str): path to image folder.
     - scratch_path (str): path to scratch folder where intermediate files will be stored.
     - start_index (int): start index of the dataset to caption.
+    - model_name (str): name of the model.
+    - model_id (str): id of the model.
 
     Output:
     - (list): list of dictionaries containing image annotations and image quality.
     """
+    # setup pytorch
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # for multi-GPU systems, force single GPU
+    if torch.cuda.is_available():
+        device_map = "cuda:0"  # force single, first GPU
+        device_type = "cuda"
+        torch_dtype = "auto"
+    elif torch.backends.mps.is_available():
+        device_map = "auto"
+        device_type = "mps"
+        torch_dtype = torch.bfloat16
+    else:
+        device_map = "auto"
+        device_type = "cpu"
+        torch_dtype = torch.bfloat16
+    print(f"Using device: {device_type}")
+
+    # load model
+    processor = AutoProcessor.from_pretrained(
+        model_id,
+        trust_remote_code=True,
+        torch_dtype=torch_dtype,
+        device_map=device_map,
+    )
+
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id,
+        trust_remote_code=True,
+        torch_dtype=torch_dtype,
+        device_map=device_map,
+    )
+
+    # print model properties
+    print("Model ID: ", model_id)
+    print("Device: ", model.device)
+    print("Dtype: ", model.dtype)
+
     # deepclone input where labels will be
     caption_output = copy.deepcopy(image_captioning_input)
 
@@ -155,7 +165,9 @@ def generate_caption_output(
         caption_output[index]["model_captions"] = [
             {
                 "model_name": model_name,
-                "caption": generate_caption(image, model, processor, prompt),
+                "caption": generate_caption(
+                    image, model, processor, prompt, device_type=device_type
+                ),
             }
         ]
 
@@ -236,6 +248,10 @@ def main():
     start_index = args.start
     end_index = args.end if args.end is not None else len(dataset_to_caption)
 
+    # model to use
+    model_name = "Molmo-7B-O-0924"
+    model_id = "allenai/Molmo-7B-O-0924"
+
     # generate output
     print(f"Generating caption output for {start_index} to {end_index} images...")
     print(f"Prompt: \n {get_prompt()}")
@@ -249,6 +265,8 @@ def main():
         "../data/caption-dataset/train",
         scratch_path,
         start_index,
+        model_name,
+        model_id,
     )
 
     # generate output path
