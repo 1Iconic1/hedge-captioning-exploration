@@ -37,7 +37,7 @@ from pycocoevalcap.cider.cider import Cider
 
 import clip
 import numpy as np
-from clipscore import get_clip_score, get_refonlyclipscore, extract_all_images
+from .clipscore import get_clip_score, get_refonlyclipscore, extract_all_images
 
 # setup pytorch for BERTScore and CLIP
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # for multi-GPU systems, force single GPU
