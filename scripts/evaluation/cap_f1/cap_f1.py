@@ -265,7 +265,6 @@ class ResultsRepo:
                 parsed_T = cap_f1.get("parsed_atomics", [])
                 T_org = cap_f1.get("T_org", [])
 
-                # model_name -> caption 매핑(원본 코드는 인덱스 사용: 더 안전하게 이름으로 매핑)
                 captions_by_model = {}
                 for mc in item.get("model_captions", []):
                     captions_by_model[mc.get("model_name", "")] = mc.get("caption", "")

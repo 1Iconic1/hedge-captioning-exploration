@@ -78,7 +78,7 @@ def process_batch(
         limit=LIMIT,
     )
 
-    # Step 3: Cap F1
+    # Step 3: get Cap F1 score
     evaluation = proc.calculate_cap_f1(metadata)
     ResultsRepo.save_results_json(
         output_path=f"{folder_path}/final_{timestamp}_chunk{chunk_id}.json",
@@ -149,6 +149,7 @@ def main():
     os.makedirs(folder_path, exist_ok=True)
 
     # load the input dataset
+    print("Loading caption dataset...")
     input_data = ResultsRepo.read_json(args.input_file)
 
     # extract human captions from the input dataset
@@ -177,13 +178,17 @@ def main():
 
     # merge the json chunks and save output as json
     ResultsRepo.merge_json_chunks(
-        output_file=f"{folder_path}/__final_{timestamp}_merged.json",
+        output_file=f"{folder_path}/final_{timestamp}_merged.json",
         file_pattern=f"{folder_path}/final_{timestamp}_chunk*.json",
     )
 
-    # format the merged json as csv and save
-    ResultsRepo.format_as_csv(folder_path, timestamp)
-
+    # JSON → CSV
+    print("Saving final results into csv...")
+    ResultsRepo.export_final_csv(
+        json_path=f"{folder_path}/final_{timestamp}_merged.json",
+        csv_path=f"{folder_path}/final_{timestamp}.csv",
+        # model_keys={"gpt":"gpt-4o-2024-08-06", "molmo":"Molmo-7B-O-0924", "llama":"Llama-3.2-11B-Vision-Instruct"}
+    )
 
 if __name__ == "__main__":
     main()
