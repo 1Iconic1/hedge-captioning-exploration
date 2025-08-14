@@ -55,7 +55,7 @@ class Precision(BaseModel):
 # =========
 # Constants
 # =========
-OPENAI_MODEL = "gpt-4o-2024-08-06"
+OPENAI_MODEL = "gpt-5-2025-08-07"
 SENTINEL_BAD_QUALITY = "Quality issues are too severe to recognize visual content."
 METRIC_CAP = "cap_f1"
 
@@ -290,9 +290,11 @@ class ResultsRepo:
 
                 row = {
                     "image": file_name,
-                    "link": f'=HYPERLINK("{viz_base_url}{file_name}", "{file_name}")'
-                    if file_name
-                    else "",
+                    "link": (
+                        f'=HYPERLINK("{viz_base_url}{file_name}", "{file_name}")'
+                        if file_name
+                        else ""
+                    ),
                     "T_org": "\n".join(T_org),
                     "parsed_T": "\n".join(parsed_T),
                     "T_atomics": "\n".join(t_atomics),
