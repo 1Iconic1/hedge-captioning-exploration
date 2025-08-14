@@ -21,7 +21,7 @@ The can is yellow.
 The can is of national brand.
 The can contains tomato paste.
 The can is sitting on a counter.
-The table is made of wood."""
+The table is made of wood.""",
     },
     {
         "role": "assistant",
@@ -35,9 +35,8 @@ The can is 15 ounces.
 The can is 425 grams.
 The can has a picture on it.
 The picture shows noodles.
-The can is of national brand."""
+The can is of national brand.""",
     },
-
     # Example 2: VizWiz_train_00000196.jpg
     {
         "role": "user",
@@ -50,7 +49,7 @@ The coffee is raspberry flavored.
 The brand of the coffee is Gevalia Kaffe.
 The box contains Gevalia coffee.
 The coffee is Raspberry Danish flavored.
-The box is on a table."""
+The box is on a table.""",
     },
     {
         "role": "assistant",
@@ -59,9 +58,8 @@ The box is next to a washing machine.
 The package contains ground coffee.
 The coffee is raspberry flavored.
 The brand of the coffee is Gevalia Kaffe.
-The box is on a table."""
+The box is on a table.""",
     },
-
     # Example 3: VizWiz_train_00000457.jpg
     {
         "role": "user",
@@ -78,7 +76,7 @@ The shoe polish is for leather.
 The shoe polish is labeled as 'premiere shine'.
 The shoe polish is labeled as 'ultra brilliant'.
 There is a liquid.
-The liquid can be used for food."""
+The liquid can be used for food.""",
     },
     {
         "role": "assistant",
@@ -90,7 +88,7 @@ The container is being held up.
 The shoe polish is labeled as 'premiere shine'.
 The shoe polish is labeled as 'ultra brilliant'.
 There is a liquid.
-The liquid can be used for food."""
+The liquid can be used for food.""",
     },
 ]
 
@@ -113,7 +111,7 @@ The can is small.
 The picture shows red pasta sauce.
 The picture shows noodles.
 The can is of national tomato paste.
-The table is made of wood."""
+The table is made of wood.""",
     },
     {
         "role": "assistant",
@@ -144,9 +142,8 @@ The table is made of wood."""
     {"T_atomic": "The can is of national tomato paste.", "g_atomic": "The text includes part of the word 'TIONAL'."}
   ],
   "Counts": {"TP": 6, "FN": 7}
-}"""
+}""",
     },
-
     # Example 2: VizWiz_train_00000196.jpg
     {
         "role": "user",
@@ -165,7 +162,7 @@ Generated atomic statements:
 - The package is labeled "GEVALIA KAFFE Raspberry Danish Artificially Flavored Ground Coffee".
 - There is a kitchen appliance.
 - The kitchen appliance is black and white.
-- The kitchen appliance is partially visible."""
+- The kitchen appliance is partially visible.""",
     },
     {
         "role": "assistant",
@@ -190,9 +187,8 @@ Generated atomic statements:
     {"T_atomic": "The flavor is Raspberry Danish.", "g_atomic": "The package is labeled \"GEVALIA KAFFE Raspberry Danish Artificially Flavored Ground Coffee\"."}
   ],
   "Counts": {"TP": 5, "FN": 3}
-}"""
+}""",
     },
-
     # Example 3: VizWiz_train_00000457.jpg
     {
         "role": "user",
@@ -216,7 +212,7 @@ Generated atomic statements:
 - The container is labeled "Premiere Shine Ultra-Brillant."
 - The container is primarily red.
 - The container is primarily black.
-- There is a sponge applicator at the top of the container."""
+- There is a sponge applicator at the top of the container.""",
     },
     {
         "role": "assistant",
@@ -241,7 +237,7 @@ Generated atomic statements:
     {"T_atomic": "The shoe polish is labeled as ultra brilliant.", "g_atomic": "The container is labeled \"Premiere Shine Ultra-Brillant.\""}
   ],
   "Counts": {"TP": 3, "FN": 7}
-}"""
+}""",
     },
 ]
 
@@ -265,7 +261,7 @@ Generated atomic statements:
 - The text reads 'WT. 15 OZ. (425g)'.
 - The text includes part of the word 'TIONAL'.
 - The label has a yellow color.
-- The label has a red color."""
+- The label has a red color.""",
     },
     {
         "role": "assistant",
@@ -289,9 +285,8 @@ Generated atomic statements:
     {"g_atomic": "The label has a red color.", "T_org": "A can with a yellow and red label sits on a wooden table."}
   ],
   "Counts": {"TP": 6, "FP": 1}
-}"""
+}""",
     },
-
     # Example 2: VizWiz_train_00000196.jpg
     {
         "role": "user",
@@ -306,7 +301,7 @@ Generated atomic statements:
 - The package is labeled "GEVALIA KAFFE Raspberry Danish Artificially Flavored Ground Coffee".
 - There is a kitchen appliance.
 - The kitchen appliance is black and white.
-- The kitchen appliance is partially visible."""
+- The kitchen appliance is partially visible.""",
     },
     {
         "role": "assistant",
@@ -326,9 +321,8 @@ Generated atomic statements:
     {"g_atomic": "There is a kitchen appliance.", "T_org": "A red box of Kaffe placed next to a washing machine."}
   ],
   "Counts": {"TP": 5, "FP": 0}
-}"""
+}""",
     },
-
     # Example 3: VizWiz_train_00000457.jpg
     {
         "role": "user",
@@ -346,7 +340,7 @@ Generated atomic statements:
 - The container is labeled "Premiere Shine Ultra-Brillant."
 - The container is primarily red.
 - The container is primarily black.
-- There is a sponge applicator at the top of the container."""
+- There is a sponge applicator at the top of the container.""",
     },
     {
         "role": "assistant",
@@ -371,6 +365,6 @@ Generated atomic statements:
     {"g_atomic": "The container is labeled \\"Premiere Shine Ultra-Brillant.\\"", "T_org": "KIWI brand shoe polish - leather cuir premiere shine ultra brilliant"}
   ],
   "Counts": {"TP": 5, "FP": 3}
-}"""
+}""",
     },
 ]

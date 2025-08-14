@@ -1,11 +1,15 @@
 # refactor_pipeline.py
 from __future__ import annotations
-import json, os, time, random
-from typing import List, Dict, Any, Optional, Type, Union
+import json
+import os
+import time
+import random
+from typing import List, Dict, Any, Optional, Type
 from collections import Counter
 from pydantic import BaseModel
 from tqdm import tqdm
 from openai import OpenAI, APIError, RateLimitError, APITimeoutError
+
 
 # ========
 # Schemas
@@ -13,25 +17,40 @@ from openai import OpenAI, APIError, RateLimitError, APITimeoutError
 class AtomicSentences(BaseModel):
     atomic_captions: List[str]
 
+
 class RecallCounts(BaseModel):
-    TP: int; FN: int
+    TP: int
+    FN: int
+
 
 class RecallMatchPair(BaseModel):
-    T_atomic: str; g_atomic: str
+    T_atomic: str
+    g_atomic: str
+
 
 class Recall(BaseModel):
-    TPs: List[str]; FNs: List[str]
-    Match: List[RecallMatchPair]; Counts: RecallCounts
+    TPs: List[str]
+    FNs: List[str]
+    Match: List[RecallMatchPair]
+    Counts: RecallCounts
+
 
 class PrecisionMatchPair(BaseModel):
-    g_atomic: str; T_org: str
+    g_atomic: str
+    T_org: str
+
 
 class PrecisionCounts(BaseModel):
-    TP: int; FP: int
+    TP: int
+    FP: int
+
 
 class Precision(BaseModel):
-    TPs: List[str]; FPs: List[str]
-    Match: List[PrecisionMatchPair]; Counts: PrecisionCounts
+    TPs: List[str]
+    FPs: List[str]
+    Match: List[PrecisionMatchPair]
+    Counts: PrecisionCounts
+
 
 # =========
 # Constants
@@ -40,6 +59,7 @@ OPENAI_MODEL = "gpt-4o-2024-08-06"
 SENTINEL_BAD_QUALITY = "Quality issues are too severe to recognize visual content."
 METRIC_CAP = "cap_f1"
 
+
 # =========
 # IO layer
 # =========
@@ -47,14 +67,14 @@ class ResultsRepo:
     @staticmethod
     def read_json(path: str, keys: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """
-            Read JSON file and extract only the specified keys.
+        Read JSON file and extract only the specified keys.
 
-            Inputs:
-            - path: path to JSON file
-            - keys: list of keys to extract from each item in the JSON
+        Inputs:
+        - path: path to JSON file
+        - keys: list of keys to extract from each item in the JSON
 
-            Output:
-            - list(dictionary)
+        Output:
+        - list(dictionary)
         """
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -78,21 +98,20 @@ class ResultsRepo:
         limit: Optional[int] = None,
     ) -> None:
         """
-            Save image caption + atomic statements + optional evaluation info to a JSON file.
-            Use `update_existing` to load from a previous JSON and append evaluation only.
+        Save image caption + atomic statements + optional evaluation info to a JSON file.
+        Use `update_existing` to load from a previous JSON and append evaluation only.
 
-            Parameters:
-            - org_dataset: list of dicts from original json
-            - T_atomics: list of string results (optional)
-            - g_atomics: list of string results (optional)
-            - parsd_T: list of string results (optional)
-            - metadata: list of dicts with TPs, FPs, FNs, Counts (optional)
-            - evaluations: list of dicts with recall, precision, cap_f1 or other metrics (optional)
-            - metric_name: the evaluation metric name (e.g., "cap_f1", "BLEU", "METEOR", "ROUGE")
-            - update_existing: path to existing parsed json if you're only appending evaluation
-            - limit: maximum number of items to process (None = process all)
-        """        
-
+        Parameters:
+        - org_dataset: list of dicts from original json
+        - T_atomics: list of string results (optional)
+        - g_atomics: list of string results (optional)
+        - parsd_T: list of string results (optional)
+        - metadata: list of dicts with TPs, FPs, FNs, Counts (optional)
+        - evaluations: list of dicts with recall, precision, cap_f1 or other metrics (optional)
+        - metric_name: the evaluation metric name (e.g., "cap_f1", "BLEU", "METEOR", "ROUGE")
+        - update_existing: path to existing parsed json if you're only appending evaluation
+        - limit: maximum number of items to process (None = process all)
+        """
 
         results = []
 
@@ -105,9 +124,7 @@ class ResultsRepo:
             for i, item in enumerate(results):
                 if parsed_T:
                     item["evaluation"].setdefault("cap_f1", {})["parsed_atomics"] = [
-                        line.strip()
-                        for line in parsed_T[i]
-                        if line.strip()
+                        line.strip() for line in parsed_T[i] if line.strip()
                     ]
 
                 if T_atomics:
@@ -126,13 +143,13 @@ class ResultsRepo:
                         ]
                         for model_entry in g_atomics[i]
                     }
-                    item["evaluation"].setdefault("cap_f1", {})["g_atomics"] = model_outputs
-                
+                    item["evaluation"].setdefault("cap_f1", {})["g_atomics"] = (
+                        model_outputs
+                    )
+
                 if T_org:
                     item["evaluation"].setdefault("cap_f1", {})["T_org"] = [
-                        line.strip()
-                        for line in T_org[i]
-                        if line.strip()
+                        line.strip() for line in T_org[i] if line.strip()
                     ]
 
         if metadata:
@@ -155,7 +172,9 @@ class ResultsRepo:
                             "Counts": model_eval.get("precision", {}).get("Counts", {}),
                         },
                     }
-                results[idx]["evaluation"].setdefault(metric_name, {})["metadata"] = metric_scores
+                results[idx]["evaluation"].setdefault(metric_name, {})["metadata"] = (
+                    metric_scores
+                )
 
         if evaluations and metric_name == "cap_f1":
             for i in range(min(len(results), len(evaluations))):
@@ -182,15 +201,15 @@ class ResultsRepo:
         for m in match_list or []:
             if isinstance(m, dict):
                 if "T_atomic" in m and "g_atomic" in m:
-                    lines.append(f'{m["T_atomic"]} : {m["g_atomic"]}')
+                    lines.append(f"{m['T_atomic']} : {m['g_atomic']}")
                 elif "g_atomic" in m and "T_org" in m:
-                    lines.append(f'{m["g_atomic"]} : {m["T_org"]}')
+                    lines.append(f"{m['g_atomic']} : {m['T_org']}")
                 else:
                     lines.append(json.dumps(m, ensure_ascii=False))
             else:
                 lines.append(str(m))
         return "\n".join(lines)
-    
+
     @staticmethod
     def export_final_csv(
         json_path: str,
@@ -271,28 +290,48 @@ class ResultsRepo:
 
                 row = {
                     "image": file_name,
-                    "link": f'=HYPERLINK("{viz_base_url}{file_name}", "{file_name}")' if file_name else "",
+                    "link": f'=HYPERLINK("{viz_base_url}{file_name}", "{file_name}")'
+                    if file_name
+                    else "",
                     "T_org": "\n".join(T_org),
                     "parsed_T": "\n".join(parsed_T),
                     "T_atomics": "\n".join(t_atomics),
                     "gpt_caption": captions_by_model.get(model_keys["gpt"], ""),
                     "molmo_caption": captions_by_model.get(model_keys["molmo"], ""),
                     "llama_caption": captions_by_model.get(model_keys["llama"], ""),
-                    "gpt_g_atomics": "", "molmo_g_atomics": "", "llama_g_atomics": "",
-                    "gpt_recall_TPs": "", "molmo_recall_TPs": "", "llama_recall_TPs": "",
-                    "gpt_recall_Matches": "", "molmo_recall_Matches": "", "llama_recall_Matches": "",
-                    "gpt_recall_FNs": "", "molmo_recall_FNs": "", "llama_recall_FNs": "",
-                    "gpt_precision_TPs": "", "molmo_precision_TPs": "", "llama_precision_TPs": "",
-                    "gpt_precision_Matches": "", "molmo_precision_Matches": "", "llama_precision_Matches": "",
-                    "gpt_precision_FPs": "", "molmo_precision_FPs": "", "llama_precision_FPs": "",
+                    "gpt_g_atomics": "",
+                    "molmo_g_atomics": "",
+                    "llama_g_atomics": "",
+                    "gpt_recall_TPs": "",
+                    "molmo_recall_TPs": "",
+                    "llama_recall_TPs": "",
+                    "gpt_recall_Matches": "",
+                    "molmo_recall_Matches": "",
+                    "llama_recall_Matches": "",
+                    "gpt_recall_FNs": "",
+                    "molmo_recall_FNs": "",
+                    "llama_recall_FNs": "",
+                    "gpt_precision_TPs": "",
+                    "molmo_precision_TPs": "",
+                    "llama_precision_TPs": "",
+                    "gpt_precision_Matches": "",
+                    "molmo_precision_Matches": "",
+                    "llama_precision_Matches": "",
+                    "gpt_precision_FPs": "",
+                    "molmo_precision_FPs": "",
+                    "llama_precision_FPs": "",
                     "gpt_recall": scores.get(model_keys["gpt"], {}).get("recall"),
                     "gpt_precision": scores.get(model_keys["gpt"], {}).get("precision"),
                     "gpt_capf1": scores.get(model_keys["gpt"], {}).get("cap_f1"),
                     "molmo_recall": scores.get(model_keys["molmo"], {}).get("recall"),
-                    "molmo_precision": scores.get(model_keys["molmo"], {}).get("precision"),
+                    "molmo_precision": scores.get(model_keys["molmo"], {}).get(
+                        "precision"
+                    ),
                     "molmo_capf1": scores.get(model_keys["molmo"], {}).get("cap_f1"),
                     "llama_recall": scores.get(model_keys["llama"], {}).get("recall"),
-                    "llama_precision": scores.get(model_keys["llama"], {}).get("precision"),
+                    "llama_precision": scores.get(model_keys["llama"], {}).get(
+                        "precision"
+                    ),
                     "llama_capf1": scores.get(model_keys["llama"], {}).get("cap_f1"),
                 }
 
@@ -303,12 +342,20 @@ class ResultsRepo:
                     recall = metadata.get(model_key, {}).get("recall", {})
                     row[f"{short_name}_recall_TPs"] = "\n".join(recall.get("TPs", []))
                     row[f"{short_name}_recall_FNs"] = "\n".join(recall.get("FNs", []))
-                    row[f"{short_name}_recall_Matches"] = ResultsRepo._format_matches(recall.get("Match", []))
+                    row[f"{short_name}_recall_Matches"] = ResultsRepo._format_matches(
+                        recall.get("Match", [])
+                    )
 
                     precision = metadata.get(model_key, {}).get("precision", {})
-                    row[f"{short_name}_precision_TPs"] = "\n".join(precision.get("TPs", []))
-                    row[f"{short_name}_precision_FPs"] = "\n".join(precision.get("FPs", []))
-                    row[f"{short_name}_precision_Matches"] = ResultsRepo._format_matches(precision.get("Match", []))
+                    row[f"{short_name}_precision_TPs"] = "\n".join(
+                        precision.get("TPs", [])
+                    )
+                    row[f"{short_name}_precision_FPs"] = "\n".join(
+                        precision.get("FPs", [])
+                    )
+                    row[f"{short_name}_precision_Matches"] = (
+                        ResultsRepo._format_matches(precision.get("Match", []))
+                    )
 
                 writer.writerow(row)
 
@@ -317,6 +364,7 @@ class ResultsRepo:
     @staticmethod
     def merge_json_chunks(output_file, file_pattern):
         import glob
+
         merged_data = []
 
         for filename in sorted(glob.glob(file_pattern)):
@@ -340,7 +388,12 @@ class ResultsRepo:
 # OpenAI/API layer
 # =================
 class LLMClient:
-    def __init__(self, api_key: Optional[str] = None, model: str = OPENAI_MODEL, temperature: float = 0.2):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: str = OPENAI_MODEL,
+        temperature: float = 0.2,
+    ):
         self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
         self.model = model
         self.temperature = temperature
@@ -355,7 +408,7 @@ class LLMClient:
                 last = e
                 if i == retries - 1:
                     raise
-                time.sleep(base * (2 ** i) + random.random() * jitter)
+                time.sleep(base * (2**i) + random.random() * jitter)
         if last:
             raise last
 
@@ -365,19 +418,30 @@ class LLMClient:
             return self.client.beta.chat.completions.create(
                 model=self.model, temperature=self.temperature, messages=messages
             )
+
         completion = self._retry(_do)
         return completion.choices[0].message.content
 
-    def _chat_parse(self, messages: List[Dict[str, str]], response_model: Type[BaseModel]) -> Dict[str, Any]:
+    def _chat_parse(
+        self, messages: List[Dict[str, str]], response_model: Type[BaseModel]
+    ) -> Dict[str, Any]:
         def _do():
             return self.client.beta.chat.completions.parse(
-                model=self.model, temperature=self.temperature, response_format=response_model, messages=messages
+                model=self.model,
+                temperature=self.temperature,
+                response_format=response_model,
+                messages=messages,
             )
+
         completion = self._retry(_do)
         parsed = getattr(completion.choices[0].message, "parsed", None)
         if parsed is not None:
             # Some SDKs give a Pydantic instance; convert to plain dict
-            return json.loads(parsed.model_dump_json()) if hasattr(parsed, "model_dump_json") else parsed
+            return (
+                json.loads(parsed.model_dump_json())
+                if hasattr(parsed, "model_dump_json")
+                else parsed
+            )
         return json.loads(completion.choices[0].message.content)
 
     # ---- prompts ----
@@ -401,8 +465,11 @@ class LLMClient:
         ]
         return self._chat_parse(msgs, AtomicSentences)
 
-    def dedup_atomics(self, captions: List[str], fewshot_examples: Optional[List[Dict[str, str]]] = None) -> Dict[str, List[str]]:
-
+    def dedup_atomics(
+        self,
+        captions: List[str],
+        fewshot_examples: Optional[List[Dict[str, str]]] = None,
+    ) -> Dict[str, List[str]]:
         if fewshot_examples:
             system_message = {
                 "role": "system",
@@ -446,8 +513,12 @@ class LLMClient:
         ]
         return self._chat_parse(msgs, AtomicSentences)
 
-    def recall_json(self, T_atomics: List[str], g_atomics: List[str], fewshot_examples: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
-
+    def recall_json(
+        self,
+        T_atomics: List[str],
+        g_atomics: List[str],
+        fewshot_examples: Optional[List[Dict[str, str]]] = None,
+    ) -> Dict[str, Any]:
         system_message = {
             "role": "system",
             "content": (
@@ -497,7 +568,12 @@ class LLMClient:
         msgs = [system_message] + (fewshot_examples or []) + [user_message]
         return self._chat_parse(msgs, Recall)
 
-    def precision_json(self, human_captions: List[str], g_atomics: List[str], fewshot_examples: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+    def precision_json(
+        self,
+        human_captions: List[str],
+        g_atomics: List[str],
+        fewshot_examples: Optional[List[Dict[str, str]]] = None,
+    ) -> Dict[str, Any]:
         system_message = {
             "role": "system",
             "content": (
@@ -546,19 +622,26 @@ class LLMClient:
         msgs = [system_message] + (fewshot_examples or []) + [user_message]
         return self._chat_parse(msgs, Precision)
 
+
 # =================
 # Processing layer
 # =================
 class AtomicProcessor:
-    def __init__(self, llm: LLMClient, fewshot_dedup: Optional[List[Dict[str, str]]] = None,
-                 fewshot_recall: Optional[List[Dict[str, str]]] = None,
-                 fewshot_precision: Optional[List[Dict[str, str]]] = None):
+    def __init__(
+        self,
+        llm: LLMClient,
+        fewshot_dedup: Optional[List[Dict[str, str]]] = None,
+        fewshot_recall: Optional[List[Dict[str, str]]] = None,
+        fewshot_precision: Optional[List[Dict[str, str]]] = None,
+    ):
         self.llm = llm
         self.fewshot_dedup = fewshot_dedup
         self.fewshot_recall = fewshot_recall
         self.fewshot_precision = fewshot_precision
 
-    def generate_atomic_statement(self, org_caption: List[Dict[str, Any]], limit: int = 2):
+    def generate_atomic_statement(
+        self, org_caption: List[Dict[str, Any]], limit: int = 2
+    ):
         """
         Returns:
           T_atomics: list[dict] -> {"atomic_captions":[...]} after dedup
@@ -568,14 +651,20 @@ class AtomicProcessor:
         T_atomics, g_atomics, parsed_T = [], [], []
         for item in tqdm(org_caption[:limit]):
             # --- humans ---
-            human_caps = [hc["caption"] for hc in item["human_captions"] if hc["caption"] != SENTINEL_BAD_QUALITY]
+            human_caps = [
+                hc["caption"]
+                for hc in item["human_captions"]
+                if hc["caption"] != SENTINEL_BAD_QUALITY
+            ]
             human_atomic_flat: List[str] = []
             for cap in human_caps:
                 out = self.llm.parse_atomic_statements(cap)  # {"atomic_captions":[...]}
                 human_atomic_flat.extend(out["atomic_captions"])
             parsed_T.append(human_atomic_flat)
 
-            dedup = self.llm.dedup_atomics(human_atomic_flat, fewshot_examples=self.fewshot_dedup)
+            dedup = self.llm.dedup_atomics(
+                human_atomic_flat, fewshot_examples=self.fewshot_dedup
+            )
             T_atomics.append(dedup)
 
             # --- models ---
@@ -583,28 +672,54 @@ class AtomicProcessor:
             for mc in item["model_captions"]:
                 mn, text = mc["model_name"], mc["caption"]
                 gout = self.llm.parse_atomic_statements(text)
-                model_results.append({"model_name": mn, "atomic_captions": gout["atomic_captions"]})
+                model_results.append(
+                    {"model_name": mn, "atomic_captions": gout["atomic_captions"]}
+                )
             g_atomics.append(model_results)
 
         return T_atomics, g_atomics, parsed_T
 
-    def evaluate_single_instance(self, model_name: str, T_atomics: List[str], T_original: List[str],
-                                 g_captions: List[str], print_mode: bool = False) -> Dict[str, Any]:
+    def evaluate_single_instance(
+        self,
+        model_name: str,
+        T_atomics: List[str],
+        T_original: List[str],
+        g_captions: List[str],
+        print_mode: bool = False,
+    ) -> Dict[str, Any]:
         if print_mode:
             print("T atomics\n", json.dumps(T_atomics, indent=2, ensure_ascii=False))
             print("T original\n", json.dumps(T_original, indent=2, ensure_ascii=False))
-            print(f"{model_name} g atomics\n", json.dumps(g_captions, indent=2, ensure_ascii=False))
+            print(
+                f"{model_name} g atomics\n",
+                json.dumps(g_captions, indent=2, ensure_ascii=False),
+            )
 
-        recall = self.llm.recall_json(T_atomics, g_captions, fewshot_examples=self.fewshot_recall)
-        precision = self.llm.precision_json(T_original, g_captions, fewshot_examples=self.fewshot_precision)
+        recall = self.llm.recall_json(
+            T_atomics, g_captions, fewshot_examples=self.fewshot_recall
+        )
+        precision = self.llm.precision_json(
+            T_original, g_captions, fewshot_examples=self.fewshot_precision
+        )
 
-        self._check_consistency(model_name, T_atomics, g_captions,
-                                recall_TP=recall["TPs"], recall_FN=recall["FNs"],
-                                precision_TP=precision["TPs"], precision_FP=precision["FPs"])
+        self._check_consistency(
+            model_name,
+            T_atomics,
+            g_captions,
+            recall_TP=recall["TPs"],
+            recall_FN=recall["FNs"],
+            precision_TP=precision["TPs"],
+            precision_FP=precision["FPs"],
+        )
         return {"model_name": model_name, "recall": recall, "precision": precision}
 
-    def evaluate_matching(self, T_org: List[List[str]], T_atomics: List[Dict[str, List[str]]],
-                          g_atomics: List[List[Dict[str, Any]]], print_mode: bool = False) -> List[List[Dict[str, Any]]]:
+    def evaluate_matching(
+        self,
+        T_org: List[List[str]],
+        T_atomics: List[Dict[str, List[str]]],
+        g_atomics: List[List[Dict[str, Any]]],
+        print_mode: bool = False,
+    ) -> List[List[Dict[str, Any]]]:
         outputs: List[List[Dict[str, Any]]] = []
         for i in tqdm(range(len(T_atomics))):
             human_atomic = T_atomics[i]["atomic_captions"]
@@ -614,12 +729,18 @@ class AtomicProcessor:
             for g_item in model_list:
                 name = g_item["model_name"]
                 g_caps = g_item["atomic_captions"]
-                per_models.append(self.evaluate_single_instance(name, human_atomic, human_original, g_caps, print_mode))
+                per_models.append(
+                    self.evaluate_single_instance(
+                        name, human_atomic, human_original, g_caps, print_mode
+                    )
+                )
             outputs.append(per_models)
         return outputs
 
     @staticmethod
-    def calculate_cap_f1(evaluation: List[List[Dict[str, Any]]]) -> List[List[Dict[str, float]]]:
+    def calculate_cap_f1(
+        evaluation: List[List[Dict[str, Any]]],
+    ) -> List[List[Dict[str, float]]]:
         total_output = []
         for item in tqdm(evaluation):
             per_models = []
@@ -633,17 +754,38 @@ class AtomicProcessor:
                 rTP, rFN = rec_counts.get("TP", 0), rec_counts.get("FN", 0)
                 precision = pTP / (pTP + pFP) if (pTP + pFP) else 0.0
                 recall = rTP / (rTP + rFN) if (rTP + rFN) else 0.0
-                cap_f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
-                per_models.append({"model_name": m["model_name"], "recall": recall, "precision": precision, "cap_f1": cap_f1})
+                cap_f1 = (
+                    (2 * precision * recall / (precision + recall))
+                    if (precision + recall)
+                    else 0.0
+                )
+                per_models.append(
+                    {
+                        "model_name": m["model_name"],
+                        "recall": recall,
+                        "precision": precision,
+                        "cap_f1": cap_f1,
+                    }
+                )
             total_output.append(per_models)
         return total_output
 
     @staticmethod
-    def _check_consistency(model_name: str, T_atomics: List[str], g_captions: List[str],
-                           recall_TP: List[str], recall_FN: List[str],
-                           precision_TP: List[str], precision_FP: List[str]) -> None:
+    def _check_consistency(
+        model_name: str,
+        T_atomics: List[str],
+        g_captions: List[str],
+        recall_TP: List[str],
+        recall_FN: List[str],
+        precision_TP: List[str],
+        precision_FP: List[str],
+    ) -> None:
         # multiset-aware
         if Counter(recall_TP) + Counter(recall_FN) != Counter(T_atomics):
-            print(f"[{model_name}] Recall mismatch: len T={len(T_atomics)} vs TP+FN={len(recall_TP)+len(recall_FN)}")
+            print(
+                f"[{model_name}] Recall mismatch: len T={len(T_atomics)} vs TP+FN={len(recall_TP) + len(recall_FN)}"
+            )
         if Counter(precision_TP) + Counter(precision_FP) != Counter(g_captions):
-            print(f"[{model_name}] Precision mismatch: len G={len(g_captions)} vs TP+FP={len(precision_TP)+len(precision_FP)}")
+            print(
+                f"[{model_name}] Precision mismatch: len G={len(g_captions)} vs TP+FP={len(precision_TP) + len(precision_FP)}"
+            )

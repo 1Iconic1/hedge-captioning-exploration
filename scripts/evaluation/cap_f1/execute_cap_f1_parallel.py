@@ -38,9 +38,9 @@ from fewshot_examples import (
 llm = LLMClient()
 proc = AtomicProcessor(
     llm,
-    fewshot_dedup=FEWSHOT_DEDUP_MESSAGES,           # or None
-    fewshot_recall=FEWSHOT_RECALL_MESSAGES,         # or None
-    fewshot_precision=FEWSHOT_PRECISION_MESSAGES,   # or None
+    fewshot_dedup=FEWSHOT_DEDUP_MESSAGES,  # or None
+    fewshot_recall=FEWSHOT_RECALL_MESSAGES,  # or None
+    fewshot_precision=FEWSHOT_PRECISION_MESSAGES,  # or None
 )
 
 
@@ -118,8 +118,6 @@ def run_parallel_processing(
             job.get()
 
 
-
-
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-file", type=str, help="Input file", required=True)
@@ -189,6 +187,7 @@ def main():
         csv_path=f"{folder_path}/final_{timestamp}.csv",
         # model_keys={"gpt":"gpt-4o-2024-08-06", "molmo":"Molmo-7B-O-0924", "llama":"Llama-3.2-11B-Vision-Instruct"}
     )
+
 
 if __name__ == "__main__":
     main()
