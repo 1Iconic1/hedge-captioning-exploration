@@ -55,7 +55,8 @@ class Precision(BaseModel):
 # =========
 # Constants
 # =========
-OPENAI_MODEL = "gpt-5-2025-08-07"
+OPENAI_MODEL = "gpt-4.1-2025-04-14"
+# OPENAI_MODEL = "gpt-5-2025-08-07"
 SENTINEL_BAD_QUALITY = "Quality issues are too severe to recognize visual content."
 METRIC_CAP = "cap_f1"
 
@@ -400,6 +401,10 @@ class LLMClient:
         self.model = model
         self.temperature = temperature
 
+        print(
+            f"Initialized LLM client with {self.model} and temperature = {self.temperature}"
+        )
+
     # ---- retry helper ----
     def _retry(self, fn, retries=3, base=0.8, jitter=0.2):
         last = None
@@ -469,7 +474,7 @@ class LLMClient:
 
     def dedup_atomics(
         self,
-        captions: List[str],
+        initial_atomics: List[str],
         fewshot_examples: Optional[List[Dict[str, str]]] = None,
     ) -> Dict[str, List[str]]:
         if fewshot_examples:
@@ -491,12 +496,13 @@ class LLMClient:
             }
             user_message = {
                 "role": "user",
-                "content": "Atomic Statements:\n" + "\n".join(captions),
+                "content": "Atomic Statements:\n" + "\n".join(initial_atomics),
             }
             msgs = [system_message] + fewshot_examples + [user_message]
             return self._chat_parse(msgs, AtomicSentences)
 
         # No fewshot examples, use default system message
+        # TODO: this is mostly duplicate from the above message.
         system_message = (
             "You are a helpful assistant that removes semantically redundant or overlapping atomic statements. Designed to output clean and non-redundant visual facts in JSON format.\n\n"
             "Each atomic statement expresses a single visual fact from an image.\n"
@@ -508,7 +514,7 @@ class LLMClient:
             "Output:\n"
             "Return the final list as plain text — one sentence per line, without numbering or bullet points."
         )
-        user_message = "Atomic Statements:\n" + "\n".join(captions)
+        user_message = "Atomic Statements:\n" + "\n".join(initial_atomics)
         msgs = [
             {"role": "system", "content": system_message},
             {"role": "user", "content": user_message},
@@ -641,6 +647,7 @@ class AtomicProcessor:
         self.fewshot_recall = fewshot_recall
         self.fewshot_precision = fewshot_precision
 
+    # TODO: generalize this to take any list of captions as references and a list as candidates
     def generate_atomic_statement(
         self, org_caption: List[Dict[str, Any]], limit: int = 2
     ):
@@ -670,6 +677,7 @@ class AtomicProcessor:
             T_atomics.append(dedup)
 
             # --- models ---
+            # TODO: use a list of captions, not by model
             model_results = []
             for mc in item["model_captions"]:
                 mn, text = mc["model_name"], mc["caption"]
@@ -746,10 +754,10 @@ class AtomicProcessor:
         total_output = []
         for item in tqdm(evaluation):
             per_models = []
-            for m in item:
+            for model in item:
                 # guard missing counts
-                prec_counts = m["precision"].get("Counts") or {}
-                rec_counts = m["recall"].get("Counts") or {}
+                prec_counts = model["precision"].get("Counts") or {}
+                rec_counts = model["recall"].get("Counts") or {}
                 if not prec_counts or not rec_counts:
                     continue
                 pTP, pFP = prec_counts.get("TP", 0), prec_counts.get("FP", 0)
@@ -763,7 +771,7 @@ class AtomicProcessor:
                 )
                 per_models.append(
                     {
-                        "model_name": m["model_name"],
+                        "model_name": model["model_name"],
                         "recall": recall,
                         "precision": precision,
                         "cap_f1": cap_f1,
