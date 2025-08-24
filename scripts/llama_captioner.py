@@ -29,7 +29,14 @@ from scripts.data_loader import generate_target_dataset, filter_dataset
 
 # captioning function
 def generate_caption(
-    image_object, model, processor, prompt, temperature=1.0, do_sample=False
+    image_object,
+    model,
+    processor,
+    prompt,
+    do_sample=True,
+    temperature=1.0,
+    top_p=1.0,
+    top_k=50,
 ):
     """
     Generates a caption for an image.
@@ -69,6 +76,8 @@ def generate_caption(
             stop_strings="<|endoftext|>",
             use_cache=True,
             temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
             do_sample=do_sample,
         ),
         tokenizer=processor.tokenizer,
