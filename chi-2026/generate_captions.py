@@ -302,13 +302,13 @@ for model_tag in models:
         tqdm(combined_sample_dict[START_IDX:END_IDX])
     ):
         image_index += START_IDX
-
-        image_url = image_info["image_url"]
-        image = Image.open(io.BytesIO(convert_to_png(image_info["image_url"])))
         caption_name = f"{model_tag}"
 
         # run the appropriate captioning code
         try:
+            image_url = image_info["image_url"]
+            image = Image.open(io.BytesIO(convert_to_png(image_info["image_url"])))
+
             if model_tag == "gpt-4.1":
                 combined_sample_dict[image_index][caption_name] = get_gpt_caption(
                     image_url, openai_client, model_name, VLM_PROMPT, **MODEL_SETTINGS
