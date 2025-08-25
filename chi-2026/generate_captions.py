@@ -1,7 +1,10 @@
 # ------------------- Data Processing -------------------
+import sys
+
+sys.path.append("../")
+
 import pandas as pd
 import os
-import sys
 import json
 import gc
 from datetime import datetime
@@ -33,8 +36,6 @@ from scripts.llama_captioner import generate_caption as get_llama_caption
 
 # ------------------- Setup -------------------
 load_dotenv()
-sys.path.append("../")
-
 
 # ------------------- Load Data -------------------
 captioned_file = "./input-data/combined-image-input_1997-images_2025-08-24.json"
@@ -220,19 +221,28 @@ VLM_PROMPT = (
     "4: DO NOT use introductory phrases (e.g., 'The image shows', 'The object is', 'The primary object is').\n\n"
     "Output only the final description of the product."
 )
-print(VLM_PROMPT)
+
+print(f"Models: {models}")
+print(f"Model settings: {MODEL_SETTINGS}")
+print(
+    f"Images in dataset: {len(combined_sample_dict)} | Start Index: {START_IDX}, END_IDX: {END_IDX}, Images to Caption: {END_IDX - START_IDX}"
+)
+print(f"Prompt: \n{VLM_PROMPT}")
 
 # ------------------- Caption Generation -------------------
+run_date = datetime.now().strftime("%Y-%m-%d_%H:%M")
 for model_tag in models:
     # load relevant model
     if model_tag == "gpt-4.1":
         openai_client = OpenAI()
         openai_client.api_key = os.getenv("OPENAI_API_KEY")
         model_name = "gpt-4.1-2025-04-14"
+
     elif model_tag == "gemini-2.5-flash":
         # The client gets the API key from the environment variable `GEMINI_API_KEY`.
         google_client = genai.Client()
         model_name = "gemini-2.5-flash"
+
     elif model_tag == "llama-90B-4bit":
         model_name = "Llama-3.2-90B-Vision-Instruct-bnb-4bit"
         model_id = "unsloth/Llama-3.2-90B-Vision-Instruct-bnb-4bit"
@@ -247,14 +257,16 @@ for model_tag in models:
         print("Model ID: ", model_id)
         print("Device: ", model.device)
         print("Dtype: ", model.dtype)
+
     elif model_tag == "molmo-72B-4bit":
-        # For 2 x 24 GB. If using 1 x 48 GB or more (lucky you), you can just use device_map="auto"
+        # For 2 x 24 GB. 1 x 48 GB or more *should* work on just 1 GPU, but I've ran out of memory
         device_map = {
-            "model.vision_backbone": 0,  # Seems to be required to not run out of memory at 48 GB
+            "model.vision_backbone": 0,
             "model.transformer.wte": 0,
             "model.transformer.ln_f": 0,
             "model.transformer.ff_out": 1,
         }
+
         # For 2 x 24 GB, this works for *only* 38 or 39. Any higher or lower and it'll either only work for 1 token of output or fail completely.
         switch_point = 38  # layer index to switch to second GPU
         device_map |= {
@@ -289,6 +301,8 @@ for model_tag in models:
     for image_index, image_info in enumerate(
         tqdm(combined_sample_dict[START_IDX:END_IDX])
     ):
+        image_index += START_IDX
+
         image_url = image_info["image_url"]
         image = Image.open(io.BytesIO(convert_to_png(image_info["image_url"])))
         caption_name = f"{model_tag}"
@@ -330,15 +344,17 @@ for model_tag in models:
             combined_sample_dict[image_index][caption_name] = ""
 
         # save intermediate files every 100 captions
-        if image_index != 0 and (image_index % 100) == 0:
-            os.makedirs("./captioned-data/intermediate-checkpoints", exist_ok=True)
-            intermediate_output_file = f"./captioned-data/intermediate-checkpoints/combined-sample-{START_IDX}-to-{image_index}_{model_tag}.json"
+        if image_index != START_IDX and (image_index % 100) == 0:
+            os.makedirs(
+                f"./captioned-data/intermediate-checkpoints/{run_date}/", exist_ok=True
+            )
+            intermediate_output_file = f"./captioned-data/intermediate-checkpoints/{run_date}/combined-sample-{START_IDX}-to-{image_index}_{model_tag}.json"
             print(
                 f"Saving intermediate file for {model_tag} to {intermediate_output_file} for {START_IDX} to {image_index}."
             )
 
             with open(intermediate_output_file, "w") as f:
-                json.dump(combined_sample_dict[START_IDX:image_index], f)
+                json.dump(combined_sample_dict[START_IDX:image_index], f, indent=2)
 
     # clean-up
     if model_tag == "gpt-4.1":
@@ -352,7 +368,7 @@ for model_tag in models:
         gc.collect()
     elif model_tag == "molmo-72B-4bit":
         # clear cache and model objects
-        del device_map, switch_point, model_name, model, processor
+        del device_map, switch_point, model, processor
         torch.cuda.empty_cache()
         gc.collect()
     del model_name
@@ -361,11 +377,10 @@ for model_tag in models:
 # ------------------- Save Data -------------------
 # Save JSON
 os.makedirs("./captioned-data/", exist_ok=True)
-with open(
-    f"./captioned-data/captioned-data-all-models_{START_IDX}-to-{END_IDX}_{datetime.now().strftime('%Y-%m-%d_%H:%M')}.json"
-    "w",
-) as f:
-    json.dump(combined_sample_dict[START_IDX:END_IDX], f)
+output_file_json_name = f"./captioned-data/captioned-data-all-models_{START_IDX}-to-{END_IDX}_{datetime.now().strftime('%Y-%m-%d_%H:%M')}.json"
+with open(output_file_json_name, "w") as f:
+    json.dump(combined_sample_dict[START_IDX:END_IDX], f, indent=2)
+print(f"Captioned data saved as JSON to: {output_file_json_name}")
 
 # Save CSV
 column_order = {
@@ -425,14 +440,14 @@ final_column_order = (
     column_order["annotation_info"] + model_col_order + column_order["image_quality"]
 )
 
-# output csv
+# output formatted csv
 output_df = pd.DataFrame(combined_sample_dict[START_IDX:END_IDX])
-
-# format output
 output_df = output_df[final_column_order]
 
 # save
+output_file_csv_name = f"./captioned-data/captioned-data-all-models_{START_IDX}-to-{END_IDX}_{datetime.now().strftime('%Y-%m-%d_%H:%M')}.csv"
 output_df.to_csv(
-    f"./captioned-data/captioned-data-all-models_{START_IDX}-to-{END_IDX}_{datetime.now().strftime('%Y-%m-%d_%H:%M')}.csv",
+    output_file_csv_name,
     index=False,
 )
+print(f"Captioned data saved as CSV to: {output_file_csv_name}")
