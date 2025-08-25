@@ -416,6 +416,11 @@ class LLMClient:
                 if i == retries - 1:
                     raise
                 time.sleep(base * (2**i) + random.random() * jitter)
+            except Exception as e:
+                print(f"LLM Client Error (not rate limit or timeout): {e}")
+                last = e
+                if i == retries - 1:
+                    raise
         if last:
             raise last
 
