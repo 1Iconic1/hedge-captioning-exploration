@@ -33,9 +33,11 @@ def generate_caption(
     model,
     processor,
     prompt,
-    temperature=1.0,
-    do_sample=False,
     device_type="cuda",
+    do_sample=True,
+    temperature=1.0,
+    top_p=1.0,
+    top_k=50,
 ):
     """
     Generates a caption for an image.
@@ -68,6 +70,8 @@ def generate_caption(
             tokenizer=processor.tokenizer,
             use_cache=True,
             temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
             do_sample=do_sample,
         )
 
