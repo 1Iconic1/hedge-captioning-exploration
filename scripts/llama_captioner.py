@@ -65,7 +65,7 @@ def generate_caption(
     output = model.generate(
         **inputs,
         generation_config=GenerationConfig(
-            max_new_tokens=300,
+            max_new_tokens=500,
             stop_strings="<|endoftext|>",
             use_cache=True,
             temperature=temperature,

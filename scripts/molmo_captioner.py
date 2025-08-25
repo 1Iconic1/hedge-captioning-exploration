@@ -64,7 +64,7 @@ def generate_caption(
     def generate_output():
         return model.generate_from_batch(
             inputs,
-            GenerationConfig(max_new_tokens=300, stop_strings="<|endoftext|>"),
+            GenerationConfig(max_new_tokens=500, stop_strings="<|endoftext|>"),
             tokenizer=processor.tokenizer,
             use_cache=True,
             temperature=temperature,
