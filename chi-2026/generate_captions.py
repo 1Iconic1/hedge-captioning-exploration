@@ -38,7 +38,9 @@ from scripts.llama_captioner import generate_caption as get_llama_caption
 load_dotenv()
 
 # ------------------- Load Data -------------------
-captioned_file = "./input-data/combined-image-input_1997-images_2025-08-24.json"
+captioned_file = (
+    "./input-data/combined-image-input_1997_partially-completed_2025-08-25_16-30.json"
+)
 
 combined_sample_dict = None
 if captioned_file and os.path.isfile(captioned_file):
@@ -205,7 +207,7 @@ models = [
 
 MODEL_SETTINGS = dict(temperature=1.0, top_p=0.95)
 
-START_IDX = 250
+START_IDX = 0
 END_IDX = len(combined_sample_dict)
 
 VLM_PROMPT = (
@@ -302,12 +304,22 @@ for model_tag in models:
         tqdm(combined_sample_dict[START_IDX:END_IDX])
     ):
         image_index += START_IDX
+        image_url = image_info["image_url"]
         caption_name = f"{model_tag}"
+
+        # check if a caption already exists for the model before continuing
+        if (
+            caption_name in combined_sample_dict[image_index]
+            and combined_sample_dict[image_index][caption_name] != ""
+        ):
+            print(
+                f"{image_index} ({image_url}) already has a caption for {model_tag}...skipping."
+            )
+            continue
 
         # run the appropriate captioning code
         try:
-            image_url = image_info["image_url"]
-            image = Image.open(io.BytesIO(convert_to_png(image_info["image_url"])))
+            image = Image.open(io.BytesIO(convert_to_png(image_url)))
 
             if model_tag == "gpt-4.1":
                 combined_sample_dict[image_index][caption_name] = get_gpt_caption(
@@ -337,7 +349,7 @@ for model_tag in models:
                 )
         except Exception as e:
             print(
-                f"Error processing image {image_index} ({image_info['image_url']}) for {model_tag}: {e}"
+                f"Error processing image {image_index} ({image_url}) for {model_tag}: {e}"
             )
 
             # empty caption if error
