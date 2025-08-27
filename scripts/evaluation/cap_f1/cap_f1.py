@@ -417,12 +417,8 @@ class LLMClient:
                     raise
                 time.sleep(base * (2**i) + random.random() * jitter)
             except Exception as e:
-                print(f"LLM Client Error (not rate limit or timeout): {e}")
                 last = e
-                if i == retries - 1:
-                    raise
-        if last:
-            raise last
+        raise last
 
     # ---- low-level callers ----
     def _chat(self, messages: List[Dict[str, str]]) -> str:
@@ -445,8 +441,13 @@ class LLMClient:
                 messages=messages,
             )
 
-        completion = self._retry(_do)
-        parsed = getattr(completion.choices[0].message, "parsed", None)
+        try:
+            completion = self._retry(_do)
+            parsed = getattr(completion.choices[0].message, "parsed", None)
+        except Exception as e:
+            print(f"LLM Client Error (not rate limit or timeout): {e}")
+            return None
+
         if parsed is not None:
             # Some SDKs give a Pydantic instance; convert to plain dict
             return (
@@ -673,9 +674,12 @@ class AtomicProcessor:
             human_atomic_flat: List[str] = []
             for cap in human_caps:
                 out = self.llm.parse_atomic_statements(cap)  # {"atomic_captions":[...]}
+                if out is None:
+                    out = [""]
                 human_atomic_flat.extend(out["atomic_captions"])
             parsed_T.append(human_atomic_flat)
 
+            # TODO: this fails sometimes
             dedup = self.llm.dedup_atomics(
                 human_atomic_flat, fewshot_examples=self.fewshot_dedup
             )
@@ -687,6 +691,8 @@ class AtomicProcessor:
             for mc in item["model_captions"]:
                 mn, text = mc["model_name"], mc["caption"]
                 gout = self.llm.parse_atomic_statements(text)
+                if gout is None:
+                    gout = ""
                 model_results.append(
                     {"model_name": mn, "atomic_captions": gout["atomic_captions"]}
                 )
