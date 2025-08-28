@@ -575,6 +575,8 @@ def main():
         "rouge",
         "cider",
         "spice",
+        "spice-period",
+        "spice-semicolon",
         "bertscore",
         "bertscore_idf",
         "clipscore",
@@ -615,6 +617,26 @@ def main():
                         scores = [{"score": x} for x in scores]
                     elif metric == "spice":
                         average, scores = execute_spice(candidates[model], references)
+                    elif metric == "spice-period":
+                        candidates_no_period = [
+                            x.replace(".", "") for x in candidates[model]
+                        ]
+                        references_no_period = [
+                            [x.replace(".", "") for x in ref] for ref in references
+                        ]
+                        average, scores = execute_spice(
+                            candidates_no_period, references_no_period
+                        )
+                    elif metric == "spice-semicolon":
+                        candidates_no_period = [
+                            x.replace(".", ";") for x in candidates[model]
+                        ]
+                        references_no_period = [
+                            [x.replace(".", ";") for x in ref] for ref in references
+                        ]
+                        average, scores = execute_spice(
+                            candidates_no_period, references_no_period
+                        )
                     elif metric == "bertscore":
                         scores = execute_bertscore(
                             candidates[model], references, device=device_type

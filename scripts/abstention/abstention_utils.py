@@ -2,17 +2,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-#=============================================================================================
+# =============================================================================================
 # Risk-Abstention Curve utils
-#=============================================================================================
+# =============================================================================================
 # make data for risk abstention curves
 
+
 def compute_risk(scores, correctness, thres):
-    '''
+    """
     Computes the estimated risk given a threshold: total loss / number of samples
 
     Note that loss = 1 if and only if thres < score and correctness is False
-    '''
+    """
     total_loss = 0
 
     for idx, score in enumerate(scores):
@@ -21,33 +22,35 @@ def compute_risk(scores, correctness, thres):
 
     return total_loss / len(scores)
 
+
 def compute_abstention_rate(scores, thres):
-    '''
+    """
     Computes the proportion of scores < thres
-    '''
+    """
     return np.sum(scores < thres) / len(scores)
 
-def prepare_risk_abstention(scores, correctness, n_steps:int):
-    '''
+
+def prepare_risk_abstention(scores, correctness, n_steps: int):
+    """
     Creates a dictionary that is ready to be fed into `plot_risk_abstention_tradeoff()`
-    
+
     ## Parameters
     > **scores**
     >> A list or numpy array of computed (or generated) scores
 
     > **correctness**
     >> A corresponding list or numpy array of binary yes/no scores for caption correctness
-    
+
     > **n_steps**
     >> The number of lambda values to try. These will be separated linearly.
 
     ## Returns
     > **results**: *dict*
     >> Each of keywords "lambdas", "risks", and "abstention_rates" is associated with an array of equal length.
-        The "lambdas" array has the different tested thresholds. 
+        The "lambdas" array has the different tested thresholds.
         The "risks" array has computed risks for each threshold.
         The "abstention_rates" array has computed abstention rates for each threshold
-    '''
+    """
     # prepare thresholds
     min_score = np.min(scores)
     max_score = np.max(scores)
@@ -63,24 +66,21 @@ def prepare_risk_abstention(scores, correctness, n_steps:int):
         abstention_rates[idx] = compute_abstention_rate(scores, thres)
 
     # create the dict
-    results = {
-        'lambdas' : lambdas,
-        'risks' : risks,
-        'abstention_rates' : abstention_rates
-        }
+    results = {"lambdas": lambdas, "risks": risks, "abstention_rates": abstention_rates}
     return results
 
-def plot_risk_abstention_tradeoff(results: dict, annotate:bool=True):
+
+def plot_risk_abstention_tradeoff(results: dict, annotate: bool = True):
     """
     Visualize how Risk and Abstention change with thresholded lambda values as well as the Risk-Abstention Curve
-    
+
     ## Parameters:
     > **results**: *dict*
-    >> Each of keywords "lambdas", "risks", and "abstention_rates" is associated with an array of equal length. 
-        The "lambdas" array has the different tested thresholds. 
+    >> Each of keywords "lambdas", "risks", and "abstention_rates" is associated with an array of equal length.
+        The "lambdas" array has the different tested thresholds.
         The "risks" array has computed risks for each threshold.
         The "abstention_rates" array has computed abstention rates for each threshold
-    
+
     > **annotate**: *bool, optional (default True)*
     >> Decides if different thresholds should be shown on the ROC curve.
 
@@ -143,12 +143,14 @@ def plot_risk_abstention_tradeoff(results: dict, annotate:bool=True):
 
     return fig, axes
 
-#=============================================================================================
+
+# =============================================================================================
 # ROC Curve utils
-#=============================================================================================
+# =============================================================================================
+
 
 def compute_roc(computed_scores, correct_scores, thres):
-    '''
+    """
     Computes the false and true positive rates. Assumes that computed_score < thres is a negative.
 
     ## Parameters:
@@ -164,17 +166,19 @@ def compute_roc(computed_scores, correct_scores, thres):
     # Returns:
     > **tp_rate**: *float*
     >> The true positive rate. This is the number of true positives divided by the total number of positives in `correct_scores`.
-    
+
     > **fp_rate**: *float*
     >> The false positive rate. This is the number of false positives divided by the total number of negatives in `correct_scores`.
 
-    '''
+    """
     # First, get positives and negatives
     abstain_policy = np.array(computed_scores) < thres
 
     # compute true positive rate
     # positive means abstain, but correct means it should not have abstained
-    n_true_positives = np.sum(np.logical_and(abstain_policy, np.logical_not(correct_scores)))
+    n_true_positives = np.sum(
+        np.logical_and(abstain_policy, np.logical_not(correct_scores))
+    )
     n_real_positives = np.sum(np.logical_not(correct_scores))
     tp_rate = n_true_positives / n_real_positives
 
@@ -186,10 +190,13 @@ def compute_roc(computed_scores, correct_scores, thres):
 
     return tp_rate, fp_rate
 
-def plot_roc(computed_scores, correct_scores, n_steps:int, label:str, annotate:bool=True):
-    '''
+
+def plot_roc(
+    computed_scores, correct_scores, n_steps: int, label: str, annotate: bool = True
+):
+    """
     Visualizes the ROC curve for the computed scores with a certain number of steps.
-    
+
     ## Parameters:
     > **computed_scores**: *list, numpy array*
     >> Contains computed scores
@@ -210,7 +217,7 @@ def plot_roc(computed_scores, correct_scores, n_steps:int, label:str, annotate:b
     > **fig**: *matplotlib.pyplot.figure object*
 
     > **axes**: *matplotlib.pyplot.axes object*
-    '''
+    """
     # set up thresholds
     min_val = np.min(computed_scores)
     max_val = np.max(computed_scores)
@@ -218,8 +225,8 @@ def plot_roc(computed_scores, correct_scores, n_steps:int, label:str, annotate:b
 
     # Pre-allocate numpy arrays for the true/false positive rates
     # We add a +1 because we want it to touch the top right corner
-    tp_rates = np.ones(n_steps+1)
-    fp_rates = np.ones(n_steps+1)
+    tp_rates = np.ones(n_steps + 1)
+    fp_rates = np.ones(n_steps + 1)
 
     # fill in the values
     for idx, thres in enumerate(thresholds):
@@ -235,13 +242,17 @@ def plot_roc(computed_scores, correct_scores, n_steps:int, label:str, annotate:b
     thresholds = (np.array(thresholds) - min_thres) / (max_thres - min_thres)
 
     # Plot
-    fig, axes = plt.subplots(1, 1, figsize=(12,12))
+    fig, axes = plt.subplots(1, 1, figsize=(12, 12))
     axes.plot(fp_rates, tp_rates, "b-o", linewidth=2, label=label, alpha=0.8)
 
-    axes.set_xlabel("False Positive Rate (FPR)\nRate at which policy incorrectly abstains when model was correct.",
-                    fontsize=12)
-    axes.set_ylabel("True Positive Rate (TPR)\nRate at which policy correctly abstains when model was incorrect",
-                    fontsize=12)
+    axes.set_xlabel(
+        "False Positive Rate (FPR)\nRate at which policy incorrectly abstains when model was correct.",
+        fontsize=12,
+    )
+    axes.set_ylabel(
+        "True Positive Rate (TPR)\nRate at which policy correctly abstains when model was incorrect",
+        fontsize=12,
+    )
     axes.set_title(
         f"ROC Curve (N = {len(computed_scores)}) using Abstention Policy with {n_steps} Lambda thresholds",
         fontsize=14,
@@ -266,7 +277,11 @@ def plot_roc(computed_scores, correct_scores, n_steps:int, label:str, annotate:b
 
     if annotate:
         # Add lambda annotations
-        for fpr, tpr, lam in zip(fp_rates, tp_rates, thresholds,):
+        for fpr, tpr, lam in zip(
+            fp_rates,
+            tp_rates,
+            thresholds,
+        ):
             axes.annotate(
                 f"λ={lam:.4}",
                 (fpr, tpr),
@@ -275,7 +290,7 @@ def plot_roc(computed_scores, correct_scores, n_steps:int, label:str, annotate:b
                 fontsize=9,
                 color="black",
                 alpha=0.8,
-                )
+            )
 
     # Add random classifier
     axes.plot([0, 1], [0, 1], "k--", alpha=0.5, linewidth=1, label="Random Classifier")
