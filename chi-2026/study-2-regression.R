@@ -640,9 +640,11 @@ predictors <- c(
 ################################################################################
 ## simple gpt model without interactions
 gpt_model_simple <- glm(
-  `gpt-4.1_correct` ~ blur + framing + rotation,
+  `gpt-4.1_correct` ~
+    # `curved label` + `text panel` +
+    blur + framing + rotation,
   data = gpt_regression_df,
-  family = binomial
+  family = binomial(link = "logit")
 )
 summary(gpt_model_simple)
 confint(gpt_model_simple)
@@ -669,17 +671,12 @@ car::vif(gpt_model_simple, type = "predictor")
 ## gpt model with interactions
 gpt_model_interactions <- glm(
   `gpt-4.1_correct` ~
-    `curved label` * `text panel` +
+    # `curved label` * `text panel` +
     blur * framing * rotation,
   data = gpt_regression_df,
-  family = binomial
+  family = binomial(link = "logit")
 )
 
-# + obstruction * `too bright`
-# `too bright` * `too dark`
-# blur * `too dark` + blur * `too bright` +
-# obstruction * `too dark`  +
-# rotation * `too dark` + rotation * `too bright`,
 summary(gpt_model_interactions)
 confint(gpt_model_interactions)
 car::vif(gpt_model_interactions, type = "predictor")
@@ -704,9 +701,11 @@ car::vif(gpt_model_interactions, type = "predictor")
 ################################################################################
 ## simple gemini model without interactions
 gemini_model_simple <- glm(
-  `gemini-2.5-flash_correct` ~ blur + framing + rotation,
+  `gemini-2.5-flash_correct` ~
+    # `curved label` + `text panel` +
+    blur + framing + rotation,
   data = gemini_regression_df,
-  family = binomial
+  family = binomial(link = "logit")
 )
 summary(gemini_model_simple)
 confint(gemini_model_simple)
@@ -730,10 +729,10 @@ car::vif(gemini_model_simple, type = "predictor")
 ## gemini model with interactions
 gemini_model_interactions <- glm(
   `gemini-2.5-flash_correct` ~
-    `curved label` * `text panel` +
+    # `curved label` * `text panel` +
     blur * framing * rotation,
   data = gemini_regression_df,
-  family = binomial
+  family = binomial(link = "logit")
 )
 summary(gemini_model_interactions)
 confint(gemini_model_interactions)
@@ -758,9 +757,11 @@ confint(gemini_model_interactions)
 ################################################################################
 ## simple llama model without interactions
 llama_model_simple <- glm(
-  `llama-90b-4bit_correct` ~ `curved label` + `text panel` + blur + framing + rotation,
+  `llama-90b-4bit_correct` ~
+    # `curved label` + `text panel` +
+    blur + framing + rotation,
   data = llama_regression_df,
-  family = binomial
+  family = binomial(link = "logit")
 )
 summary(llama_model_simple)
 confint(llama_model_simple)
@@ -784,10 +785,10 @@ car::vif(llama_model_simple, type = "predictor")
 ## llama model with interactions
 llama_model_interactions <- glm(
   `llama-90b-4bit_correct` ~
-    `curved label` * `text panel` +
+    # `curved label` * `text panel` +
     blur * framing * rotation,
   data = llama_regression_df,
-  family = binomial
+  family = binomial(link = "logit")
 )
 summary(llama_model_interactions)
 confint(llama_model_interactions)
@@ -812,9 +813,11 @@ confint(llama_model_interactions)
 ################################################################################
 ## simple molmo model without interactions
 molmo_model_simple <- glm(
-  `molmo-72b-4bit_correct` ~ `curved label` + `text panel` + framing + blur + rotation,
+  `molmo-72b-4bit_correct` ~
+    # `curved label` + `text panel` +
+    framing + blur + rotation,
   data = molmo_regression_df,
-  family = binomial
+  family = binomial(link = "logit")
 )
 summary(molmo_model_simple)
 confint(molmo_model_simple)
@@ -839,10 +842,10 @@ car::vif(molmo_model_simple, type = "predictor")
 ## molmo model with interactions
 molmo_model_interactions <- glm(
   `molmo-72b-4bit_correct` ~
-    `curved label` * `text panel` +
+    # `curved label` * `text panel` +
     blur * framing * rotation,
   data = molmo_regression_df,
-  family = binomial
+  family = binomial(link = "logit")
 )
 summary(molmo_model_interactions)
 confint(molmo_model_interactions)
