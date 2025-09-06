@@ -134,9 +134,9 @@ def load_marketing_data(marketing_data_path: str):
 
 
 def combine_data(
-    low_quality_data: pd.DataFrame,
-    high_quality_data: pd.DataFrame,
-    marketing_data: pd.DataFrame,
+    low_quality_data: pd.DataFrame = None,
+    high_quality_data: pd.DataFrame = None,
+    marketing_data: pd.DataFrame = None,
     should_randomize: bool = False,
 ):
     """Combines data into a single list of dictionaries.
@@ -153,9 +153,9 @@ def combine_data(
     # create a pandas dataframe with all dataframes combined
     output_df = pd.concat(
         [
-            low_quality_data,
-            high_quality_data,
-            marketing_data,
+            low_quality_data if low_quality_data is not None else pd.DataFrame(),
+            high_quality_data if high_quality_data is not None else pd.DataFrame(),
+            marketing_data if marketing_data is not None else pd.DataFrame(),
         ]
     )
 
@@ -167,19 +167,34 @@ def combine_data(
         output_df[col] = output_df[col].str.lower().str.strip()
 
     # clean-up columns
-    output_df["annotator"] = (
-        output_df["annotator"].fillna("") + output_df["new annotator"]
-    ).fillna("")
-    output_df["annotation notes"] = (
-        output_df["annotation notes"].fillna("")
-        + output_df["new annotation notes"].fillna("")
-    ).fillna("")
+    if "annotator" in output_df.columns and "new annotator" in output_df.columns:
+        output_df["annotator"] = (
+            output_df["annotator"].fillna("") + output_df["new annotator"]
+        ).fillna("")
+    else:
+        output_df["annotator"] = ""
+    if "annotation notes" in output_df.columns:
+        output_df["annotation notes"] = (
+            output_df["annotation notes"].fillna("")
+            + output_df["new annotation notes"].fillna("")
+        ).fillna("")
+    else:
+        output_df["annotation notes"] = ""
 
     # don't replace empty with False since since some of the data doesn't have annotations
-    output_df["curved label"] = (
-        output_df["curved label"].astype(str).replace({"x": "True"})
-    )
-    output_df["text panel"] = output_df["text panel"].astype(str).replace({"x": "True"})
+    if "curved label" in output_df.columns:
+        output_df["curved label"] = (
+            output_df["curved label"].astype(str).replace({"x": "True"})
+        )
+    else:
+        output_df["curved label"] = ""
+
+    if "text panel" in output_df.columns:
+        output_df["text panel"] = (
+            output_df["text panel"].astype(str).replace({"x": "True"})
+        )
+    else:
+        output_df["text panel"] = ""
 
     # replace empty with False for quality issue columns
     for col in [
@@ -192,12 +207,16 @@ def combine_data(
         "too bright",
         "other",
     ]:
-        output_df[col] = output_df[col].astype(str).replace({"": "False"})
+        if col in output_df.columns:
+            output_df[col] = output_df[col].astype(str).replace({"": "False"})
 
     # there will always be text, given how we select products
-    output_df["text_detected"] = (
-        output_df["text_detected"].astype(str).replace({"": "True"})
-    )
+    if "text_detected" in output_df.columns:
+        output_df["text_detected"] = (
+            output_df["text_detected"].astype(str).replace({"": "True"})
+        )
+    else:
+        output_df["text_detected"] = True
 
     # remove unneeded columns
     for col in [
@@ -210,9 +229,11 @@ def combine_data(
         "new annotator",
         "new annotation notes",
     ]:
-        del output_df[col]
+        if col in output_df.columns:
+            del output_df[col]
 
     # reorder columns
+    print(output_df)
     column_info = [
         ("id", "string"),
         ("orig_id", "string"),
@@ -260,11 +281,13 @@ def combine_data(
         ("other_orig", "float64"),
         ("no_issue_orig", "float64"),
     ]
-    output_df = output_df[[col for col, _ in column_info]]
+    found_cols = [col for col, _ in column_info if col in output_df.columns]
+    output_df = output_df[found_cols]
 
     # set datatypes for columns
     for col, dtype in column_info:
-        output_df[col] = output_df[col].astype(dtype)
+        if col in output_df.columns:
+            output_df[col] = output_df[col].astype(dtype)
 
     # randomize the data
     if should_randomize:
@@ -314,9 +337,9 @@ def parse_args():
         argparse.Namespace: Arguments.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--low-quality-data-path", type=str, required=True)
-    parser.add_argument("--high-quality-data-path", type=str, required=True)
-    parser.add_argument("--marketing-data-path", type=str, required=True)
+    parser.add_argument("--low-quality-data-path", type=str, required=False)
+    parser.add_argument("--high-quality-data-path", type=str, required=False)
+    parser.add_argument("--marketing-data-path", type=str, required=False)
     parser.add_argument("--output-dir", type=str, required=True)
     parser.add_argument("--should-randomize", type=bool, default=False)
     return parser.parse_args()
@@ -327,9 +350,21 @@ def main():
     args = parse_args()
 
     # load the data
-    low_quality_images_df = load_low_quality_data(args.low_quality_data_path)
-    high_quality_images_df = load_high_quality_data(args.high_quality_data_path)
-    marketing_images_df = load_marketing_data(args.marketing_data_path)
+    low_quality_images_df = (
+        load_low_quality_data(args.low_quality_data_path)
+        if args.low_quality_data_path
+        else None
+    )
+    high_quality_images_df = (
+        load_high_quality_data(args.high_quality_data_path)
+        if args.high_quality_data_path
+        else None
+    )
+    marketing_images_df = (
+        load_marketing_data(args.marketing_data_path)
+        if args.marketing_data_path
+        else None
+    )
 
     # combine the data
     combined_images_df = combine_data(
