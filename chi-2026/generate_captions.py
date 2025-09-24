@@ -37,18 +37,22 @@ from scripts.llama_captioner import generate_caption as get_llama_caption
 # ------------------- Setup -------------------
 load_dotenv()
 
-# ------------------- Load Data -------------------
-captioned_file = (
-    "./input-data/combined-image-input_1997_partially-completed_2025-08-25_16-30.json"
-)
 
-combined_sample_dict = None
-if captioned_file and os.path.isfile(captioned_file):
-    with open(captioned_file, "r") as f:
-        combined_sample_dict = json.load(f)
-
-# show the data we're working with
-print(f"Number of samples: {len(combined_sample_dict)}")
+# ------------------- Constants -------------------
+def get_vlm_prompt():
+    return (
+        "You are a helpful assistant who identifies products in images for blind and low-vision individuals. Identify the product in the image while following these guidelines:\n"
+        "1: Identify crucial features about the product, including:\n"
+        "-- Object type (can, bag, plastic container, etc.) \n"
+        "-- Product type (prepared or frozen meal, seasoning mix, soda, coffee) \n"
+        "-- Brand (Heinz, Coca-Cola, Starbucks, etc.) \n"
+        "-- Variety (specific flavors, sizes, count of items, etc.) \n"
+        "-- Visual features (color, shape, size, etc.) \n"
+        "2: Use clear, direct, and objective language. Do not use vague adjectives like 'large' or 'small', or vague adverbs like 'prominently' or 'clearly'.\n"
+        "3: DO NOT mention camera artifacts (e.g., blur) or if an object is partially visible.\n"
+        "4: DO NOT use introductory phrases (e.g., 'The image shows', 'The object is', 'The primary object is').\n\n"
+        "Output only the final description of the product."
+    )
 
 
 # ------------------- Image Processing -------------------
@@ -197,269 +201,282 @@ def get_gemini_caption(
         return ""
 
 
-# ------------------- Model Settings -------------------
-models = [
-    "gpt-4.1",
-    "gemini-2.5-flash",
-    "llama-90B-4bit",
-    "molmo-72B-4bit",
-]
+def main():
+    # ------------------- Load Data -------------------
+    captioned_file = "./input-data/combined-image-input_1997_partially-completed_2025-08-25_16-30.json"
 
-MODEL_SETTINGS = dict(temperature=1.0, top_p=0.95)
+    combined_sample_dict = None
+    if captioned_file and os.path.isfile(captioned_file):
+        with open(captioned_file, "r") as f:
+            combined_sample_dict = json.load(f)
 
-START_IDX = 0
-END_IDX = len(combined_sample_dict)
+    # show the data we're working with
+    print(f"Number of samples: {len(combined_sample_dict)}")
 
-VLM_PROMPT = (
-    "You are a helpful assistant who identifies products in images for blind and low-vision individuals. Identify the product in the image while following these guidelines:\n"
-    "1: Identify crucial features about the product, including:\n"
-    "-- Object type (can, bag, plastic container, etc.) \n"
-    "-- Product type (prepared or frozen meal, seasoning mix, soda, coffee) \n"
-    "-- Brand (Heinz, Coca-Cola, Starbucks, etc.) \n"
-    "-- Variety (specific flavors, sizes, count of items, etc.) \n"
-    "-- Visual features (color, shape, size, etc.) \n"
-    "2: Use clear, direct, and objective language. Do not use vague adjectives like 'large' or 'small', or vague adverbs like 'prominently' or 'clearly'.\n"
-    "3: DO NOT mention camera artifacts (e.g., blur) or if an object is partially visible.\n"
-    "4: DO NOT use introductory phrases (e.g., 'The image shows', 'The object is', 'The primary object is').\n\n"
-    "Output only the final description of the product."
-)
+    # ------------------- Model Settings -------------------
+    models = [
+        "gpt-4.1",
+        "gemini-2.5-flash",
+        "llama-90B-4bit",
+        "molmo-72B-4bit",
+    ]
 
-print(f"Models: {models}")
-print(f"Model settings: {MODEL_SETTINGS}")
-print(
-    f"Images in dataset: {len(combined_sample_dict)} | Start Index: {START_IDX}, END_IDX: {END_IDX}, Images to Caption: {END_IDX - START_IDX}"
-)
-print(f"Prompt: \n{VLM_PROMPT}")
+    MODEL_SETTINGS = dict(temperature=1.0, top_p=0.95)
 
-# ------------------- Caption Generation -------------------
-run_date = datetime.now().strftime("%Y-%m-%d_%H:%M")
-for model_tag in models:
-    # load relevant model
-    if model_tag == "gpt-4.1":
-        openai_client = OpenAI()
-        openai_client.api_key = os.getenv("OPENAI_API_KEY")
-        model_name = "gpt-4.1-2025-04-14"
+    START_IDX = 0
+    END_IDX = len(combined_sample_dict)
 
-    elif model_tag == "gemini-2.5-flash":
-        # The client gets the API key from the environment variable `GEMINI_API_KEY`.
-        google_client = genai.Client()
-        model_name = "gemini-2.5-flash"
+    VLM_PROMPT = get_vlm_prompt()
 
-    elif model_tag == "llama-90B-4bit":
-        model_name = "Llama-3.2-90B-Vision-Instruct-bnb-4bit"
-        model_id = "unsloth/Llama-3.2-90B-Vision-Instruct-bnb-4bit"
-        model = MllamaForConditionalGeneration.from_pretrained(
-            model_id,
-            torch_dtype=torch.bfloat16,
-            device_map="auto",
-        )
-        processor = AutoProcessor.from_pretrained(model_id)
+    print(f"Models: {models}")
+    print(f"Model settings: {MODEL_SETTINGS}")
+    print(
+        f"Images in dataset: {len(combined_sample_dict)} | Start Index: {START_IDX}, END_IDX: {END_IDX}, Images to Caption: {END_IDX - START_IDX}"
+    )
+    print(f"Prompt: \n{VLM_PROMPT}")
 
-        # print model properties
-        print("Model ID: ", model_id)
-        print("Device: ", model.device)
-        print("Dtype: ", model.dtype)
+    # ------------------- Caption Generation -------------------
+    run_date = datetime.now().strftime("%Y-%m-%d_%H:%M")
+    for model_tag in models:
+        # load relevant model
+        if model_tag == "gpt-4.1":
+            openai_client = OpenAI()
+            openai_client.api_key = os.getenv("OPENAI_API_KEY")
+            model_name = "gpt-4.1-2025-04-14"
 
-    elif model_tag == "molmo-72B-4bit":
-        # For 2 x 24 GB. 1 x 48 GB or more *should* work on just 1 GPU, but I've ran out of memory
-        device_map = {
-            "model.vision_backbone": 0,
-            "model.transformer.wte": 0,
-            "model.transformer.ln_f": 0,
-            "model.transformer.ff_out": 1,
-        }
+        elif model_tag == "gemini-2.5-flash":
+            # The client gets the API key from the environment variable `GEMINI_API_KEY`.
+            google_client = genai.Client()
+            model_name = "gemini-2.5-flash"
 
-        # For 2 x 24 GB, this works for *only* 38 or 39. Any higher or lower and it'll either only work for 1 token of output or fail completely.
-        switch_point = 38  # layer index to switch to second GPU
-        device_map |= {
-            f"model.transformer.blocks.{i}": 0 for i in range(0, switch_point)
-        }
-        device_map |= {
-            f"model.transformer.blocks.{i}": 1 for i in range(switch_point, 80)
-        }
+        elif model_tag == "llama-90B-4bit":
+            model_name = "Llama-3.2-90B-Vision-Instruct-bnb-4bit"
+            model_id = "unsloth/Llama-3.2-90B-Vision-Instruct-bnb-4bit"
+            model = MllamaForConditionalGeneration.from_pretrained(
+                model_id,
+                torch_dtype=torch.bfloat16,
+                device_map="auto",
+            )
+            processor = AutoProcessor.from_pretrained(model_id)
 
-        # model_name = "SeanScripts/Molmo-72B-0924-nf4"
-        model_name = "kgarg0/Molmo-72B-0924-nf4-fixed"
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            use_safetensors=True,
-            device_map=device_map,
-            trust_remote_code=True,  # Required for Molmo at the moment.
-        )
-        model.model.vision_backbone.float()  # vision backbone needs to be in FP32 for this
+            # print model properties
+            print("Model ID: ", model_id)
+            print("Device: ", model.device)
+            print("Dtype: ", model.dtype)
 
-        processor = AutoProcessor.from_pretrained(
-            model_name,
-            trust_remote_code=True,  # Required for Molmo at the moment.
-        )
+        elif model_tag == "molmo-72B-4bit":
+            # For 2 x 24 GB. 1 x 48 GB or more *should* work on just 1 GPU, but I've ran out of memory
+            device_map = {
+                "model.vision_backbone": 0,
+                "model.transformer.wte": 0,
+                "model.transformer.ln_f": 0,
+                "model.transformer.ff_out": 1,
+            }
 
-        # print model properties
-        print("Model ID: ", model_name)
-        print("Device: ", model.device)
-        print("Dtype: ", model.dtype)
+            # For 2 x 24 GB, this works for *only* 38 or 39. Any higher or lower and it'll either only work for 1 token of output or fail completely.
+            switch_point = 38  # layer index to switch to second GPU
+            device_map |= {
+                f"model.transformer.blocks.{i}": 0 for i in range(0, switch_point)
+            }
+            device_map |= {
+                f"model.transformer.blocks.{i}": 1 for i in range(switch_point, 80)
+            }
 
-    print(f"Generating Captions for {model_tag} using {model_name}")
+            # model_name = "SeanScripts/Molmo-72B-0924-nf4"
+            model_name = "kgarg0/Molmo-72B-0924-nf4-fixed"
+            model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                use_safetensors=True,
+                device_map=device_map,
+                trust_remote_code=True,  # Required for Molmo at the moment.
+            )
+            model.model.vision_backbone.float()  # vision backbone needs to be in FP32 for this
 
-    for image_index, image_info in enumerate(
-        tqdm(combined_sample_dict[START_IDX:END_IDX])
-    ):
-        image_index += START_IDX
-        image_url = image_info["image_url"]
-        caption_name = f"{model_tag}"
+            processor = AutoProcessor.from_pretrained(
+                model_name,
+                trust_remote_code=True,  # Required for Molmo at the moment.
+            )
 
-        # check if a caption already exists for the model before continuing
-        if (
-            caption_name in combined_sample_dict[image_index]
-            and combined_sample_dict[image_index][caption_name] != ""
+            # print model properties
+            print("Model ID: ", model_name)
+            print("Device: ", model.device)
+            print("Dtype: ", model.dtype)
+
+        print(f"Generating Captions for {model_tag} using {model_name}")
+
+        for image_index, image_info in enumerate(
+            tqdm(combined_sample_dict[START_IDX:END_IDX])
         ):
-            print(
-                f"{image_index} ({image_url}) already has a caption for {model_tag}...skipping."
-            )
-            continue
+            image_index += START_IDX
+            image_url = image_info["image_url"]
+            caption_name = f"{model_tag}"
 
-        # run the appropriate captioning code
-        try:
-            image = Image.open(io.BytesIO(convert_to_png(image_url)))
-
-            if model_tag == "gpt-4.1":
-                combined_sample_dict[image_index][caption_name] = get_gpt_caption(
-                    image_url, openai_client, model_name, VLM_PROMPT, **MODEL_SETTINGS
+            # check if a caption already exists for the model before continuing
+            if (
+                caption_name in combined_sample_dict[image_index]
+                and combined_sample_dict[image_index][caption_name] != ""
+            ):
+                print(
+                    f"{image_index} ({image_url}) already has a caption for {model_tag}...skipping."
                 )
-            elif model_tag == "gemini-2.5-flash":
-                combined_sample_dict[image_index][caption_name] = get_gemini_caption(
-                    image_url, google_client, VLM_PROMPT, **MODEL_SETTINGS
+                continue
+
+            # run the appropriate captioning code
+            try:
+                image = Image.open(io.BytesIO(convert_to_png(image_url)))
+
+                if model_tag == "gpt-4.1":
+                    combined_sample_dict[image_index][caption_name] = get_gpt_caption(
+                        image_url,
+                        openai_client,
+                        model_name,
+                        VLM_PROMPT,
+                        **MODEL_SETTINGS,
+                    )
+                elif model_tag == "gemini-2.5-flash":
+                    combined_sample_dict[image_index][caption_name] = (
+                        get_gemini_caption(
+                            image_url, google_client, VLM_PROMPT, **MODEL_SETTINGS
+                        )
+                    )
+                elif model_tag == "llama-90B-4bit":
+                    combined_sample_dict[image_index][caption_name] = get_llama_caption(
+                        image,
+                        model,
+                        processor,
+                        VLM_PROMPT,
+                        do_sample=True,
+                        **MODEL_SETTINGS,
+                    )
+                elif model_tag == "molmo-72B-4bit":
+                    combined_sample_dict[image_index][caption_name] = get_molmo_caption(
+                        image,
+                        model,
+                        processor,
+                        VLM_PROMPT,
+                        do_sample=True,
+                        **MODEL_SETTINGS,
+                    )
+            except Exception as e:
+                print(
+                    f"Error processing image {image_index} ({image_url}) for {model_tag}: {e}"
                 )
-            elif model_tag == "llama-90B-4bit":
-                combined_sample_dict[image_index][caption_name] = get_llama_caption(
-                    image,
-                    model,
-                    processor,
-                    VLM_PROMPT,
-                    do_sample=True,
-                    **MODEL_SETTINGS,
+
+                # empty caption if error
+                combined_sample_dict[image_index][caption_name] = ""
+
+            # save intermediate files every 100 captions
+            if image_index != START_IDX and (image_index % 100) == 0:
+                os.makedirs(
+                    f"./captioned-data/intermediate-checkpoints/{run_date}/",
+                    exist_ok=True,
                 )
-            elif model_tag == "molmo-72B-4bit":
-                combined_sample_dict[image_index][caption_name] = get_molmo_caption(
-                    image,
-                    model,
-                    processor,
-                    VLM_PROMPT,
-                    do_sample=True,
-                    **MODEL_SETTINGS,
+                intermediate_output_file = f"./captioned-data/intermediate-checkpoints/{run_date}/combined-sample-{START_IDX}-to-{image_index}_{model_tag}.json"
+                print(
+                    f"Saving intermediate file for {model_tag} to {intermediate_output_file} for {START_IDX} to {image_index}."
                 )
-        except Exception as e:
-            print(
-                f"Error processing image {image_index} ({image_url}) for {model_tag}: {e}"
-            )
 
-            # empty caption if error
-            combined_sample_dict[image_index][caption_name] = ""
+                with open(intermediate_output_file, "w") as f:
+                    json.dump(combined_sample_dict[START_IDX:image_index], f, indent=2)
 
-        # save intermediate files every 100 captions
-        if image_index != START_IDX and (image_index % 100) == 0:
-            os.makedirs(
-                f"./captioned-data/intermediate-checkpoints/{run_date}/", exist_ok=True
-            )
-            intermediate_output_file = f"./captioned-data/intermediate-checkpoints/{run_date}/combined-sample-{START_IDX}-to-{image_index}_{model_tag}.json"
-            print(
-                f"Saving intermediate file for {model_tag} to {intermediate_output_file} for {START_IDX} to {image_index}."
-            )
+        # clean-up
+        if model_tag == "gpt-4.1":
+            del openai_client
+        elif model_tag == "gemini-2.5-flash":
+            del google_client
+        elif model_tag == "llama-90B-4bit":
+            # clear cache and model objects
+            del model_id, model, processor
+            torch.cuda.empty_cache()
+            gc.collect()
+        elif model_tag == "molmo-72B-4bit":
+            # clear cache and model objects
+            del device_map, switch_point, model, processor
+            torch.cuda.empty_cache()
+            gc.collect()
+        del model_name
+        print("-" * 80)
 
-            with open(intermediate_output_file, "w") as f:
-                json.dump(combined_sample_dict[START_IDX:image_index], f, indent=2)
+    # ------------------- Save Data -------------------
+    # Save JSON
+    os.makedirs("./captioned-data/", exist_ok=True)
+    output_file_json_name = f"./captioned-data/captioned-data-all-models_{START_IDX}-to-{END_IDX}_{datetime.now().strftime('%Y-%m-%d_%H:%M')}.json"
+    with open(output_file_json_name, "w") as f:
+        json.dump(combined_sample_dict[START_IDX:END_IDX], f, indent=2)
+    print(f"Captioned data saved as JSON to: {output_file_json_name}")
 
-    # clean-up
-    if model_tag == "gpt-4.1":
-        del openai_client
-    elif model_tag == "gemini-2.5-flash":
-        del google_client
-    elif model_tag == "llama-90B-4bit":
-        # clear cache and model objects
-        del model_id, model, processor
-        torch.cuda.empty_cache()
-        gc.collect()
-    elif model_tag == "molmo-72B-4bit":
-        # clear cache and model objects
-        del device_map, switch_point, model, processor
-        torch.cuda.empty_cache()
-        gc.collect()
-    del model_name
-    print("-" * 80)
+    # Save CSV
+    column_order = {
+        "annotation_info": [
+            "id",
+            "orig_id",
+            "file_name",
+            "image_url",
+            "image_preview",
+            "type",
+            "human_captions",
+            "expert_caption",
+            "orig annotator",
+            "orig annotation notes",
+            "unable_to_verify",
+            "double code notes",
+            "double verified",
+            "annotator",
+            "annotation notes",
+            "object",
+            "product",
+            "brand",
+            "variety",
+            "double annotator",
+            "double annotation",
+        ],
+        "image_quality": [
+            "text_detected",
+            "curved label",
+            "text panel",
+            "unrecognizable",
+            "framing",
+            "blur",
+            "obstruction",
+            "rotation",
+            "too dark",
+            "too bright",
+            "other",
+            "unrecognizable_orig",
+            "framing_orig",
+            "blur_orig",
+            "obstruction_orig",
+            "rotation_orig",
+            "too_dark_orig",
+            "too_bright_orig",
+            "other_orig",
+            "no_issue_orig",
+        ],
+    }
 
-# ------------------- Save Data -------------------
-# Save JSON
-os.makedirs("./captioned-data/", exist_ok=True)
-output_file_json_name = f"./captioned-data/captioned-data-all-models_{START_IDX}-to-{END_IDX}_{datetime.now().strftime('%Y-%m-%d_%H:%M')}.json"
-with open(output_file_json_name, "w") as f:
-    json.dump(combined_sample_dict[START_IDX:END_IDX], f, indent=2)
-print(f"Captioned data saved as JSON to: {output_file_json_name}")
+    # arrange columns
+    model_col_order = []
+    for model_tag in models:
+        model_col_order.append(f"{model_tag}")
 
-# Save CSV
-column_order = {
-    "annotation_info": [
-        "id",
-        "orig_id",
-        "file_name",
-        "image_url",
-        "image_preview",
-        "type",
-        "human_captions",
-        "expert_caption",
-        "orig annotator",
-        "orig annotation notes",
-        "unable_to_verify",
-        "double code notes",
-        "double verified",
-        "annotator",
-        "annotation notes",
-        "object",
-        "product",
-        "brand",
-        "variety",
-        "double annotator",
-        "double annotation",
-    ],
-    "image_quality": [
-        "text_detected",
-        "curved label",
-        "text panel",
-        "unrecognizable",
-        "framing",
-        "blur",
-        "obstruction",
-        "rotation",
-        "too dark",
-        "too bright",
-        "other",
-        "unrecognizable_orig",
-        "framing_orig",
-        "blur_orig",
-        "obstruction_orig",
-        "rotation_orig",
-        "too_dark_orig",
-        "too_bright_orig",
-        "other_orig",
-        "no_issue_orig",
-    ],
-}
+    final_column_order = (
+        column_order["annotation_info"]
+        + model_col_order
+        + column_order["image_quality"]
+    )
 
-# arrange columns
-model_col_order = []
-for model_tag in models:
-    model_col_order.append(f"{model_tag}")
+    # output formatted csv
+    output_df = pd.DataFrame(combined_sample_dict[START_IDX:END_IDX])
+    output_df = output_df[final_column_order]
 
-final_column_order = (
-    column_order["annotation_info"] + model_col_order + column_order["image_quality"]
-)
+    # save
+    output_file_csv_name = f"./captioned-data/captioned-data-all-models_{START_IDX}-to-{END_IDX}_{datetime.now().strftime('%Y-%m-%d_%H:%M')}.csv"
+    output_df.to_csv(
+        output_file_csv_name,
+        index=False,
+    )
+    print(f"Captioned data saved as CSV to: {output_file_csv_name}")
 
-# output formatted csv
-output_df = pd.DataFrame(combined_sample_dict[START_IDX:END_IDX])
-output_df = output_df[final_column_order]
 
-# save
-output_file_csv_name = f"./captioned-data/captioned-data-all-models_{START_IDX}-to-{END_IDX}_{datetime.now().strftime('%Y-%m-%d_%H:%M')}.csv"
-output_df.to_csv(
-    output_file_csv_name,
-    index=False,
-)
-print(f"Captioned data saved as CSV to: {output_file_csv_name}")
+if __name__ == "__main__":
+    main()
