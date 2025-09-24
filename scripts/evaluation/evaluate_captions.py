@@ -579,6 +579,10 @@ def main():
         "spice-semicolon",
         "bertscore",
         "bertscore_idf",
+        "bertscore_semantic_model",
+        "bertscore_semantic_model_idf",
+        "bertscore_general_model",
+        "bertscore_general_model_idf",
         "clipscore",
         "clipscore_ref",
     ]:
@@ -639,13 +643,47 @@ def main():
                         )
                     elif metric == "bertscore":
                         scores = execute_bertscore(
-                            candidates[model], references, device=device_type
+                            candidates[model],
+                            references,
+                            device=device_type,
+                            model_type="microsoft/deberta-xlarge-mnli",
                         )
                     elif metric == "bertscore_idf":
                         scores = execute_bertscore(
                             candidates[model],
                             references,
                             device=device_type,
+                            model_type="microsoft/deberta-xlarge-mnli",
+                            idf=True,
+                        )
+                    elif metric == "bertscore_semantic_model":
+                        scores = execute_bertscore(
+                            candidates[model],
+                            references,
+                            device=device_type,
+                            model_type="distiluse-base-multilingual-cased-v1",
+                        )
+                    elif metric == "bertscore_semantic_model_idf":
+                        scores = execute_bertscore(
+                            candidates[model],
+                            references,
+                            device=device_type,
+                            model_type="distiluse-base-multilingual-cased-v1",
+                            idf=True,
+                        )
+                    elif metric == "bertscore_general_model":
+                        scores = execute_bertscore(
+                            candidates[model],
+                            references,
+                            device=device_type,
+                            model_type="all-mpnet-base-v2",
+                        )
+                    elif metric == "bertscore_general_model_idf":
+                        scores = execute_bertscore(
+                            candidates[model],
+                            references,
+                            device=device_type,
+                            model_type="all-mpnet-base-v2",
                             idf=True,
                         )
                     elif metric == "clipscore":
