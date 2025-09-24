@@ -10,13 +10,14 @@
 #SBATCH --error /scratch/kapil/slurm-generate-samples-cpu.err  	  # File to which STDERR will be written, %j inserts jobid
 #SBATCH --nodelist dizzy                                   # run only on dizzy
 
-# activate shell
-source /home/kapilg/.local/share/virtualenvs/local-blurred-captioning-exploration-bH5G8VRE/bin/activate
-
 # go to the correct directory
-cd /home/kapilg/projects/local-blurred-captioning-exploration/chi-2026/
+cd /home/kapilg/projects/local-blurred-captioning-exploration/
+
+# activate shell
+source .venv/bin/activate
 
 # run code
+cd chi-2026/
 python generate_samples.py \
     --input-file ./coded-data/cleaned/final-image-sample_945-images_09-23-25.csv \
     --models gpt \
