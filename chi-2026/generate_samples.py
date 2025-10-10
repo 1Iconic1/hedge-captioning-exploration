@@ -135,7 +135,7 @@ def get_additional_samples(
             # The client gets the API key from the environment variable `GEMINI_API_KEY`.
             google_client = genai.Client()
             model_name = "gemini-2.5-flash"
-        elif model_tag == "llama-90B-4bit":
+        elif model_tag == "llama-90b-4bit":
             model_name = "Llama-3.2-90B-Vision-Instruct-bnb-4bit"
             model_id = "unsloth/Llama-3.2-90B-Vision-Instruct-bnb-4bit"
             model = MllamaForConditionalGeneration.from_pretrained(
@@ -149,7 +149,7 @@ def get_additional_samples(
             print("Model ID: ", model_id)
             print("Device: ", model.device)
             print("Dtype: ", model.dtype)
-        elif model_tag == "molmo-72B-4bit":
+        elif model_tag == "molmo-72b-4bit":
             # For 2 x 24 GB. 1 x 48 GB or more *should* work on just 1 GPU, but I've ran out of memory
             device_map = {
                 "model.vision_backbone": 0,
