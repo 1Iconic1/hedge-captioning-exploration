@@ -402,7 +402,7 @@ def get_additional_samples(
             # save intermediate files every 100 captions
             if image_index != start_index and (image_index % intermediate_save) == 0:
                 os.makedirs(
-                    f"./sampled-data/intermediate-checkpoints/{run_date}/",
+                    f"./sampled-data/intermediate-checkpoints/{run_date}_{'-'.join(models)}/",
                     exist_ok=True,
                 )
                 intermediate_output_file = f"./sampled-data/intermediate-checkpoints/{run_date}/combined-sample-{start_index}-to-{image_index}_{model_tag}.json"
@@ -471,7 +471,7 @@ def main():
     output_file = (
         args.output_file
         if args.output_file is not None
-        else f"./sampled-data/sampled-data_{start_index}-to-{end_index}_{len(output_data_size)}-images_{num_samples}-samples_{datetime.now().strftime('%Y-%m-%d_%H:%M')}.json"
+        else f"./sampled-data/sampled-data_{start_index}-to-{end_index}_{'-'.join(models)}_{len(output_data_size)}-images_{num_samples}-samples_{datetime.now().strftime('%Y-%m-%d_%H:%M')}.json"
     )
     print(f"Output will be saved to: {output_file}")
 
