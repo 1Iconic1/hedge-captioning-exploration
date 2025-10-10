@@ -401,15 +401,16 @@ def get_additional_samples(
 
             # save intermediate files every 100 captions
             if image_index != start_index and (image_index % intermediate_save) == 0:
-                os.makedirs(
-                    f"./sampled-data/intermediate-checkpoints/{run_date}_{'-'.join(models)}/",
-                    exist_ok=True,
-                )
-                intermediate_output_file = f"./sampled-data/intermediate-checkpoints/{run_date}/combined-sample-{start_index}-to-{image_index}_{model_tag}.json"
+                base_dir = f"./sampled-data/intermediate-checkpoints/{run_date}_{'-'.join(models)}"
+                intermediate_output_file = f"{base_dir}/combined-sample-{start_index}-to-{image_index}_{model_tag}.json"
                 print(
                     f"Saving intermediate file for {model_tag} to {intermediate_output_file} for {start_index} to {image_index}."
                 )
 
+                os.makedirs(
+                    base_dir,
+                    exist_ok=True,
+                )
                 with open(intermediate_output_file, "w") as f:
                     json.dump(
                         image_dict_additional_samples[start_index:image_index],
