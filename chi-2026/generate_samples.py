@@ -13,6 +13,7 @@ python generate_samples.py \
 
 import os
 import sys
+import traceback
 
 sys.path.append("../")
 
@@ -195,9 +196,7 @@ def get_additional_samples(
             image_url = image_info["image_url"]
             caption_name = f"{model_tag}"
 
-            # try to load image
             try:
-                image = Image.open(io.BytesIO(convert_to_png(image_url)))
                 # check if a caption already exists for the model before continuing
                 # Structure of output is samples: captions: { model_name: {samples: [sample1, sample2, ...], greedy_response: greedy_response}}
                 if (
@@ -208,10 +207,12 @@ def get_additional_samples(
                     .get(caption_name, {})
                     .get("samples", None)
                     is not None
-                    and image_dict_additional_samples[image_index]
-                    .get("captions", {})
-                    .get(caption_name, {})
-                    .get("samples", 0)
+                    and len(
+                        image_dict_additional_samples[image_index]
+                        .get("captions", {})
+                        .get(caption_name, {})
+                        .get("samples", [])
+                    )
                     >= num_samples
                     and image_dict_additional_samples[image_index]
                     .get("captions", {})
@@ -226,30 +227,49 @@ def get_additional_samples(
 
                 # generate additional samples
                 image_captions = {
-                    "was_correct": None,
+                    "was_correct": image_dict_additional_samples[image_index].get(
+                        model_correct_key, None
+                    ),
                     "samples": [],
-                    "greedy_response": "",
+                    "greedy_response": image_dict_additional_samples[image_index]
+                    .get("captions", {})
+                    .get(caption_name, {})
+                    .get("greedy_response", ""),
+                    "reference_caption": image_dict_additional_samples[image_index].get(
+                        caption_name, ""
+                    ),
                 }
-                for index in range(num_samples):
-                    # for the first sample, use existing caption and correctness code
-                    if (
-                        index == 0
-                        and image_dict_additional_samples[image_index].get(
-                            caption_name, None
-                        )
-                        is not None
-                    ):
-                        image_captions["samples"].append(
-                            image_dict_additional_samples[image_index][caption_name]
-                        )
-                        sample_was_correct = image_dict_additional_samples[
-                            image_index
-                        ].get(model_correct_key, None)
 
-                        if sample_was_correct is not None:
-                            image_captions["was_correct"] = sample_was_correct
-                        continue
+                # copy over all samples that are already present
+                samples_left = num_samples
+                if (
+                    image_dict_additional_samples[image_index].get(caption_name, None)
+                    is not None
+                    and len(
+                        image_dict_additional_samples[image_index]
+                        .get("captions", {})
+                        .get(caption_name, {})
+                        .get("samples", [])
+                    )
+                    > 0
+                ):
+                    image_captions["samples"] = image_dict_additional_samples[
+                        image_index
+                    ]["captions"][caption_name]["samples"]
+                    samples_left -= len(image_captions["samples"])
+                    print(
+                        f"Copied over {len(image_captions['samples'])} samples from existing caption for {model_tag} for image {image_dict_additional_samples[image_index]['id']} ({image_url}). Generating {samples_left} more."
+                    )
 
+                if samples_left > 0:
+                    image = Image.open(io.BytesIO(convert_to_png(image_url)))
+                else:
+                    print(
+                        f"No samples left to generate for {model_tag} for image {image_dict_additional_samples[image_index]['id']} ({image_url})...skipping."
+                    )
+                    image = None
+
+                for _ in range(samples_left):
                     # run the appropriate captioning code
                     try:
                         if model_tag == "gpt-4.1":
@@ -301,45 +321,67 @@ def get_additional_samples(
 
                 # get greedy response
                 if greedy_response:
-                    try:
-                        if model_tag == "gpt-4.1":
-                            image_captions["greedy_response"] = get_gpt_caption(
-                                image_url,
-                                openai_client,
-                                model_name,
-                                vlm_prompt,
-                                **greedy_model_settings,
-                            )
-                        elif model_tag == "gemini-2.5-flash":
-                            image_captions["greedy_response"] = get_gemini_caption(
-                                image_url,
-                                google_client,
-                                vlm_prompt,
-                                **greedy_model_settings,
-                            )
-                        elif model_tag == "llama-90B-4bit":
-                            image_captions["greedy_response"] = get_llama_caption(
-                                image,
-                                model,
-                                processor,
-                                vlm_prompt,
-                                do_sample=True,
-                                **greedy_model_settings,
-                            )
-                        elif model_tag == "molmo-72B-4bit":
-                            image_captions["greedy_response"] = get_molmo_caption(
-                                image,
-                                model,
-                                processor,
-                                vlm_prompt,
-                                do_sample=True,
-                                **greedy_model_settings,
-                            )
-                    except Exception as e:
-                        image_captions["greedy_response"] = ""
+                    # check if greedy response already exists
+                    if image_captions["greedy_response"] != "":
                         print(
-                            f"Error processing image {image_index} ({image_url}) for {model_tag} getting greedy response: {e}"
+                            f"Greedy response already exists for image {image_dict_additional_samples[image_index]['id']} ({image_url}) for {model_tag}...skipping."
                         )
+                    else:
+                        # load image if not already loaded and get greedy response
+                        if image is None:
+                            image = Image.open(io.BytesIO(convert_to_png(image_url)))
+
+                        try:
+                            if model_tag == "gpt-4.1":
+                                image_captions["greedy_response"] = get_gpt_caption(
+                                    image_url,
+                                    openai_client,
+                                    model_name,
+                                    vlm_prompt,
+                                    **greedy_model_settings,
+                                )
+                            elif model_tag == "gemini-2.5-flash":
+                                image_captions["greedy_response"] = get_gemini_caption(
+                                    image_url,
+                                    google_client,
+                                    vlm_prompt,
+                                    **greedy_model_settings,
+                                )
+                            elif model_tag == "llama-90B-4bit":
+                                image_captions["greedy_response"] = get_llama_caption(
+                                    image,
+                                    model,
+                                    processor,
+                                    vlm_prompt,
+                                    do_sample=True,
+                                    **greedy_model_settings,
+                                )
+                            elif model_tag == "molmo-72B-4bit":
+                                image_captions["greedy_response"] = get_molmo_caption(
+                                    image,
+                                    model,
+                                    processor,
+                                    vlm_prompt,
+                                    do_sample=True,
+                                    **greedy_model_settings,
+                                )
+                        except Exception as e:
+                            image_captions["greedy_response"] = ""
+                            print(
+                                f"Error processing image {image_index} ({image_url}) for {model_tag} getting greedy response: {e}"
+                            )
+
+                # clean up any unicode
+                image_captions["samples"] = [
+                    sample.encode("utf-8").decode("utf-8")
+                    for sample in image_captions["samples"]
+                ]
+                image_captions["reference_caption"] = (
+                    image_captions["reference_caption"].encode("utf-8").decode("utf-8")
+                )
+                image_captions["greedy_response"] = (
+                    image_captions["greedy_response"].encode("utf-8").decode("utf-8")
+                )
 
                 # save additional samples
                 if (
@@ -354,6 +396,7 @@ def get_additional_samples(
                 print(
                     f"Error loading image {image_index} ({image_url}) for {model_tag}: {e}"
                 )
+                traceback.print_exc()
                 continue
 
             # save intermediate files every 100 captions
@@ -372,6 +415,7 @@ def get_additional_samples(
                         image_dict_additional_samples[start_index:image_index],
                         f,
                         indent=2,
+                        ensure_ascii=False,
                     )
 
         # clean-up
@@ -399,7 +443,14 @@ def main():
 
     # load data
     input_file = args.input_file
-    input_data = pd.read_csv(input_file).to_dict(orient="records")
+    if input_file.endswith(".csv"):
+        input_data = pd.read_csv(input_file).to_dict(orient="records")
+    elif input_file.endswith(".json"):
+        with open(input_file, "r") as f:
+            input_data = json.load(f)
+    else:
+        raise ValueError(f"Input file must be a CSV or JSON file. Got {input_file}")
+
     start_index = args.start_index if args.start_index is not None else 0
     end_index = args.end_index if args.end_index is not None else len(input_data)
     output_data_size = input_data[start_index:end_index]
@@ -454,7 +505,9 @@ def main():
         exist_ok=True,
     )
     with open(output_file, "w") as f:
-        json.dump(data_with_samples[start_index:end_index], f, indent=2)
+        json.dump(
+            data_with_samples[start_index:end_index], f, indent=2, ensure_ascii=False
+        )
     print(f"Saved {len(data_with_samples)} samples to {output_file}")
 
 
