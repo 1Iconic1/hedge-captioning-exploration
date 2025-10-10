@@ -353,7 +353,7 @@ def get_additional_samples(
                                     model,
                                     processor,
                                     vlm_prompt,
-                                    do_sample=True,
+                                    do_sample=False,
                                     **greedy_model_settings,
                                 )
                             elif model_tag == "molmo-72B-4bit":
@@ -362,7 +362,7 @@ def get_additional_samples(
                                     model,
                                     processor,
                                     vlm_prompt,
-                                    do_sample=True,
+                                    do_sample=False,
                                     **greedy_model_settings,
                                 )
                         except Exception as e:
