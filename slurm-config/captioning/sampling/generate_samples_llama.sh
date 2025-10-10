@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --ntasks 1    		                              # Number of tasks to run
 #SBATCH --cpus-per-task=8                                 # CPU cores/threads
-#SBATCH --gres=gpu:1      	                              # Number of GPUs (per node)
+#SBATCH --gres=gpu:2      	                              # Number of GPUs (per node)
 #SBATCH --mem 32000        	                              # Reserve 32 GB RAM for the job
 #SBATCH --time 6-00:00    	                              # Max Runtime in D-HH:MM
 #SBATCH --partition liv.p    	                          # Partition to submit to
